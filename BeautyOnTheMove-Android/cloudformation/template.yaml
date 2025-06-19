@@ -5,7 +5,7 @@ Parameters:
   GitHubRepoName:
     Type: String
     Description: Name of your GitHub repository
-    Default: BeautyOnTheMove-Android
+    Default: KTRapha/BeautyOnTheMove
   
   GitHubThumbprintList:
     Type: String
@@ -237,7 +237,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: HasPermissionBoundary
     Properties:
-      RoleName: BeautyOnTheMoveGitHubActionsRoleWithBoundary
+      RoleName: GitHubActionsCodeDeployRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -260,9 +260,12 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                   - s3:ListBucket
+                  - s3:CreateBucket
                 Resource:
                   - !Sub '${DeploymentBucket}'
                   - !Sub '${DeploymentBucket}/*'
+                  - 'arn:aws:s3:::ktrapha-beautyonmove-android-deployments'
+                  - 'arn:aws:s3:::ktrapha-beautyonmove-android-deployments/*'
               - Effect: Allow
                 Action:
                   - codedeploy:*
@@ -274,7 +277,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: NoPermissionBoundary
     Properties:
-      RoleName: BeautyOnTheMoveGitHubActionsRoleWithoutBoundary
+      RoleName: GitHubActionsCodeDeployRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -297,9 +300,12 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                   - s3:ListBucket
+                  - s3:CreateBucket
                 Resource:
                   - !Sub '${DeploymentBucket}'
                   - !Sub '${DeploymentBucket}/*'
+                  - 'arn:aws:s3:::ktrapha-beautyonmove-android-deployments'
+                  - 'arn:aws:s3:::ktrapha-beautyonmove-android-deployments/*'
               - Effect: Allow
                 Action:
                   - codedeploy:*
