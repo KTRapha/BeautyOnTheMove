@@ -1,0 +1,80 @@
+name: Deploy Android App to AWS
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1  # Change to your preferred region
+  APPLICATION_NAME: BeautyOnTheMove-Android
+  DEPLOYMENT_GROUP_NAME: BeautyOnTheMove-Android-DeploymentGroup
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v2
+      
+    - name: Build Android APK
+      run: |
+        cd android
+        ./gradlew assembleRelease
+        cd ..
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::665802315326:role/GitHubActionsCodeDeployRole
+        role-session-name: GitHubActions
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Create deployment package
+      run: |
+        mkdir -p deployment-package
+        cp android/app/build/outputs/apk/release/app-release.apk deployment-package/
+        cp BeautyOnTheMove-Android/appspec.yml deployment-package/
+        cp -r BeautyOnTheMove-Android/scripts deployment-package/
+        
+    - name: Upload to S3
+      run: |
+        aws s3 cp deployment-package/ s3://${{ secrets.NEW_S3_BUCKET_NAME }}/deployments/$(date +%Y%m%d-%H%M%S)/ --recursive
+        
+    - name: Create CodeDeploy deployment
+      run: |
+        aws deploy create-deployment \
+          --application-name ${{ env.APPLICATION_NAME }} \
+          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
+          --s3-location bucket=${{ secrets.NEW_S3_BUCKET_NAME }},key=deployments/$(date +%Y%m%d-%H%M%S)/,bundleType=zip \
+          --deployment-config-name CodeDeployDefault.OneAtATime \
+          --description "Deployment from GitHub Actions"
+          
+    - name: Wait for deployment
+      run: |
+        DEPLOYMENT_ID=$(aws deploy list-deployments \
+          --application-name ${{ env.APPLICATION_NAME }} \
+          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
+          --max-items 1 \
+          --query 'deployments[0]' \
+          --output text)
+          
+        aws deploy wait deployment-successful --deployment-id $DEPLOYMENT_ID 

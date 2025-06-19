@@ -1,0 +1,52 @@
+name: Test AWS Connection
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual triggering
+
+env:
+  AWS_REGION: us-east-1
+
+permissions:
+  id-token: write   # Required for requesting the JWT
+  contents: read    # Required for actions/checkout
+
+jobs:
+  test-aws-connection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::665802315326:role/GitHubActionsCodeDeployRole
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Test AWS connection
+        run: |
+          echo "🔍 Testing AWS connection..."
+          aws sts get-caller-identity
+          echo ""
+          echo "✅ AWS connection successful!"
+          
+      - name: Test CodeDeploy access
+        run: |
+          echo "🔍 Testing CodeDeploy access..."
+          aws deploy list-applications
+          echo "✅ CodeDeploy access successful!"
+          
+      - name: Test S3 access
+        run: |
+          echo "🔍 Testing S3 access..."
+          aws s3 ls
+          echo "✅ S3 access successful!"
+          
+      - name: Test specific S3 bucket access
+        run: |
+          echo "🔍 Testing specific S3 bucket access..."
+          aws s3 ls s3://${{ secrets.NEW_S3_BUCKET_NAME }} || echo "Bucket not found or no access"
+          echo "✅ S3 bucket test completed!" 
