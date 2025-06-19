@@ -7,11 +7,6 @@ Parameters:
     Description: Name of your GitHub repository
     Default: KTRapha/BeautyOnTheMove
   
-  GitHubThumbprintList:
-    Type: String
-    Description: GitHub thumbprint for OIDC
-    Default: 6938fd4d98bab03faadb97b34396831e3780aea1
-  
   VPC:
     Type: AWS::EC2::VPC::Id
     Description: VPC ID
@@ -222,16 +217,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
 
-  # IAM OIDC Identity Provider for GitHub
-  GitHubOIDCProvider:
-    Type: AWS::IAM::OIDCIdentityProvider
-    Properties:
-      Url: https://token.actions.githubusercontent.com
-      ClientIdList:
-        - sts.amazonaws.com
-      ThumbprintList:
-        - !Ref GitHubThumbprintList
-
   # IAM Role for GitHub Actions (WITH Permission Boundary)
   GitHubActionsRoleWithBoundary:
     Type: AWS::IAM::Role
@@ -243,7 +228,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Federated: !Ref GitHubOIDCProvider
+              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
@@ -283,7 +268,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Federated: !Ref GitHubOIDCProvider
+              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
