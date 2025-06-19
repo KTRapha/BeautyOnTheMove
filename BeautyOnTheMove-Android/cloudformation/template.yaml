@@ -362,26 +362,32 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-CodeDeployApplicationName'
 
+  # Outputs for when permission boundary is used
   CodeDeployDeploymentGroupNameWithBoundary:
     Description: Name of the CodeDeploy deployment group (with permission boundary)
-    Value: !If [HasPermissionBoundary, !Ref CodeDeployDeploymentGroupWithBoundary, !Ref "AWS::NoValue"]
+    Condition: HasPermissionBoundary
+    Value: !Ref CodeDeployDeploymentGroupWithBoundary
     Export:
       Name: !Sub '${AWS::StackName}-CodeDeployDeploymentGroupNameWithBoundary'
 
-  CodeDeployDeploymentGroupNameWithoutBoundary:
-    Description: Name of the CodeDeploy deployment group (without permission boundary)
-    Value: !If [NoPermissionBoundary, !Ref CodeDeployDeploymentGroupWithoutBoundary, !Ref "AWS::NoValue"]
-    Export:
-      Name: !Sub '${AWS::StackName}-CodeDeployDeploymentGroupNameWithoutBoundary'
-
   GitHubActionsRoleARNWithBoundary:
     Description: ARN of the IAM role for GitHub Actions (with permission boundary)
-    Value: !If [HasPermissionBoundary, !GetAtt GitHubActionsRoleWithBoundary.Arn, !Ref "AWS::NoValue"]
+    Condition: HasPermissionBoundary
+    Value: !GetAtt GitHubActionsRoleWithBoundary.Arn
     Export:
       Name: !Sub '${AWS::StackName}-GitHubActionsRoleARNWithBoundary'
 
+  # Outputs for when no permission boundary is used
+  CodeDeployDeploymentGroupNameWithoutBoundary:
+    Description: Name of the CodeDeploy deployment group (without permission boundary)
+    Condition: NoPermissionBoundary
+    Value: !Ref CodeDeployDeploymentGroupWithoutBoundary
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeDeployDeploymentGroupNameWithoutBoundary'
+
   GitHubActionsRoleARNWithoutBoundary:
     Description: ARN of the IAM role for GitHub Actions (without permission boundary)
-    Value: !If [NoPermissionBoundary, !GetAtt GitHubActionsRoleWithoutBoundary.Arn, !Ref "AWS::NoValue"]
+    Condition: NoPermissionBoundary
+    Value: !GetAtt GitHubActionsRoleWithoutBoundary.Arn
     Export:
       Name: !Sub '${AWS::StackName}-GitHubActionsRoleARNWithoutBoundary' 
