@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "BOTMApp.app"
-               BlueprintName = "BOTMApp"
-               ReferencedContainer = "container:BOTMApp.xcodeproj">
+               BuildableName = "BOTM.app"
+               BlueprintName = "BOTM"
+               ReferencedContainer = "container:BOTM.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "BOTMAppTests.xctest"
-               BlueprintName = "BOTMAppTests"
-               ReferencedContainer = "container:BOTMApp.xcodeproj">
+               BuildableName = "BOTMTests.xctest"
+               BlueprintName = "BOTMTests"
+               ReferencedContainer = "container:BOTM.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "BOTMApp.app"
-            BlueprintName = "BOTMApp"
-            ReferencedContainer = "container:BOTMApp.xcodeproj">
+            BuildableName = "BOTM.app"
+            BlueprintName = "BOTM"
+            ReferencedContainer = "container:BOTM.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "BOTMApp.app"
-            BlueprintName = "BOTMApp"
-            ReferencedContainer = "container:BOTMApp.xcodeproj">
+            BuildableName = "BOTM.app"
+            BlueprintName = "BOTM"
+            ReferencedContainer = "container:BOTM.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

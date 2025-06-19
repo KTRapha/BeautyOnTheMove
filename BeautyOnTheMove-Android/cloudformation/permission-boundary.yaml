@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Permission Boundary Policy for BeautyOnTheMove CodeDeploy'
+
+Parameters:
+  PermissionBoundaryName:
+    Type: String
+    Description: Name for the permission boundary policy
+    Default: BeautyOnTheMovePermissionBoundary
+
+Resources:
+  # Permission Boundary Policy
+  PermissionBoundaryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Ref PermissionBoundaryName
+      Description: Permission boundary for BeautyOnTheMove CodeDeploy roles
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow CodeDeploy service actions
+          - Effect: Allow
+            Action:
+              - codedeploy:*
+              - s3:Get*
+              - s3:List*
+              - s3:Put*
+              - s3:Delete*
+              - ec2:Describe*
+              - autoscaling:Describe*
+              - autoscaling:UpdateAutoScalingGroup
+              - elasticloadbalancing:Describe*
+              - elasticloadbalancing:RegisterTargets
+              - elasticloadbalancing:DeregisterTargets
+              - iam:PassRole
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListRolePolicies
+              - iam:ListAttachedRolePolicies
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogGroups
+              - logs:DescribeLogStreams
+            Resource: '*'
+          
+          # Deny dangerous actions
+          - Effect: Deny
+            Action:
+              - iam:DeleteRole
+              - iam:DeleteRolePolicy
+              - iam:DetachRolePolicy
+              - iam:PutRolePolicy
+              - iam:AttachRolePolicy
+              - iam:UpdateAssumeRolePolicy
+              - iam:UpdateRole
+              - iam:UpdateRoleDescription
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:DeleteRolePermissionsBoundary
+              - iam:PutRolePermissionsBoundary
+              - iam:DeleteServiceLinkedRole
+              - iam:CreateServiceLinkedRole
+              - iam:CreateRole
+              - iam:CreatePolicy
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+              - iam:CreateUser
+              - iam:DeleteUser
+              - iam:CreateGroup
+              - iam:DeleteGroup
+              - iam:CreateAccessKey
+              - iam:DeleteAccessKey
+              - iam:CreateLoginProfile
+              - iam:DeleteLoginProfile
+              - iam:CreateVirtualMFADevice
+              - iam:DeleteVirtualMFADevice
+              - iam:EnableMFADevice
+              - iam:DeactivateMFADevice
+              - iam:ResyncMFADevice
+              - iam:CreateSAMLProvider
+              - iam:DeleteSAMLProvider
+              - iam:UpdateSAMLProvider
+              - iam:CreateOpenIDConnectProvider
+              - iam:DeleteOpenIDConnectProvider
+              - iam:UpdateOpenIDConnectProviderThumbprint
+              - iam:CreateInstanceProfile
+              - iam:DeleteInstanceProfile
+              - iam:AddRoleToInstanceProfile
+              - iam:RemoveRoleFromInstanceProfile
+              - iam:CreateServiceSpecificCredential
+              - iam:DeleteServiceSpecificCredential
+              - iam:ResetServiceSpecificCredential
+              - iam:UpdateServiceSpecificCredential
+              - iam:TagPolicy
+              - iam:UntagPolicy
+              - iam:TagUser
+              - iam:UntagUser
+              - iam:TagGroup
+              - iam:UntagGroup
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:TagInstanceProfile
+              - iam:UntagInstanceProfile
+              - iam:TagSAMLProvider
+              - iam:UntagSAMLProvider
+              - iam:TagOpenIDConnectProvider
+              - iam:UntagOpenIDConnectProvider
+              - iam:TagServerCertificate
+              - iam:UntagServerCertificate
+              - iam:TagCertificateAuthority
+              - iam:UntagCertificateAuthority
+              - iam:TagSMSMFA
+              - iam:UntagSMSMFA
+              - iam:TagVirtualMFADevice
+              - iam:UntagVirtualMFADevice
+              - iam:TagUser
+              - iam:UntagUser
+              - iam:TagGroup
+              - iam:UntagGroup
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:TagInstanceProfile
+              - iam:UntagInstanceProfile
+              - iam:TagSAMLProvider
+              - iam:UntagSAMLProvider
+              - iam:TagOpenIDConnectProvider
+              - iam:UntagOpenIDConnectProvider
+              - iam:TagServerCertificate
+              - iam:UntagServerCertificate
+              - iam:TagCertificateAuthority
+              - iam:UntagCertificateAuthority
+              - iam:TagSMSMFA
+              - iam:UntagSMSMFA
+              - iam:TagVirtualMFADevice
+              - iam:UntagVirtualMFADevice
+            Resource: '*'
+
+Outputs:
+  PermissionBoundaryArn:
+    Description: ARN of the created permission boundary policy
+    Value: !Ref PermissionBoundaryPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-PermissionBoundaryArn'
+
+  PermissionBoundaryName:
+    Description: Name of the created permission boundary policy
+    Value: !Ref PermissionBoundaryPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-PermissionBoundaryName' 

@@ -1,4 +1,4 @@
-package com.botmapp
+package com.beautyonmove
 
 import android.app.Application
 import com.facebook.react.PackageList

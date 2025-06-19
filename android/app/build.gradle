@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -52,6 +53,9 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+    
+    /* New Architecture */
+    newArchEnabled = false
 }
 
 /**
@@ -77,13 +81,17 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.botmapp"
+    namespace "com.beautyonmove.app"
     defaultConfig {
-        applicationId "com.botmapp"
+        applicationId "com.beautyonmove.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
+        
+        // App metadata for Play Store
+        resValue "string", "app_name", "BeautyOnTheMove"
+        resValue "string", "app_description", "Beauty services marketplace - Your Beauty On The Move"
     }
     signingConfigs {
         debug {
@@ -92,16 +100,21 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            storeFile file('your_keystore_name.keystore')
+            storePassword 'Miamor2025'
+            keyAlias 'your_alias_name'
+            keyPassword 'Miamor2025'
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
+            shrinkResources false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }

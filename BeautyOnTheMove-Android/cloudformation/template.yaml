@@ -1,0 +1,381 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for BeautyOnTheMove Android app deployment'
+
+Parameters:
+  GitHubRepoName:
+    Type: String
+    Description: Name of your GitHub repository
+    Default: BeautyOnTheMove-Android
+  
+  GitHubThumbprintList:
+    Type: String
+    Description: GitHub thumbprint for OIDC
+    Default: 6938fd4d98bab03faadb97b34396831e3780aea1
+  
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID
+  
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public Subnet 1
+  
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public Subnet 2
+
+  PermissionBoundaryArn:
+    Type: String
+    Description: ARN of the permission boundary to apply to IAM roles (optional)
+    Default: ""
+    AllowedPattern: "^$|^arn:aws:iam::[0-9]{12}:policy/.*$"
+
+Resources:
+  # S3 Bucket for deployment artifacts
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'beauty-on-the-move-deployment-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Security Group for EC2 instances
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for BeautyOnTheMove EC2 instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  # IAM Role for EC2 instances
+  EC2InstanceProfile:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: BeautyOnTheMoveEC2Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: CodeDeployPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:Get*
+                  - s3:List*
+                Resource: !Sub '${DeploymentBucket}/*'
+
+  EC2InstanceProfileAttachment:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: BeautyOnTheMoveEC2InstanceProfile
+      Roles:
+        - !Ref EC2InstanceProfile
+
+  # Launch Template for EC2 instances
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: BeautyOnTheMoveLaunchTemplate
+      LaunchTemplateData:
+        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
+        InstanceType: t3.medium
+        IamInstanceProfile:
+          Name: !Ref EC2InstanceProfileAttachment
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y ruby wget
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            
+            # Install CodeDeploy agent
+            cd /home/ec2-user
+            wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
+            chmod +x ./install
+            ./install auto
+            systemctl start codedeploy-agent
+            systemctl enable codedeploy-agent
+
+  # Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: BeautyOnTheMoveASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      TargetGroupARNs:
+        - !Ref TargetGroup
+
+  # Application Load Balancer
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: BeautyOnTheMoveALB
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref EC2SecurityGroup
+
+  # Target Group
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: BeautyOnTheMoveTargetGroup
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+
+  # Load Balancer Listener
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # CodeDeploy Application
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: BeautyOnTheMoveApp
+      ComputePlatform: Server
+
+  # IAM Role for CodeDeploy (WITH Permission Boundary)
+  CodeDeployServiceRoleWithBoundary:
+    Type: AWS::IAM::Role
+    Condition: HasPermissionBoundary
+    Properties:
+      RoleName: BeautyOnTheMoveCodeDeployRoleWithBoundary
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+      PermissionsBoundary: !Ref PermissionBoundaryArn
+
+  # IAM Role for CodeDeploy (WITHOUT Permission Boundary)
+  CodeDeployServiceRoleWithoutBoundary:
+    Type: AWS::IAM::Role
+    Condition: NoPermissionBoundary
+    Properties:
+      RoleName: BeautyOnTheMoveCodeDeployRoleWithoutBoundary
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+
+  # IAM OIDC Identity Provider for GitHub
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCIdentityProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - !Ref GitHubThumbprintList
+
+  # IAM Role for GitHub Actions (WITH Permission Boundary)
+  GitHubActionsRoleWithBoundary:
+    Type: AWS::IAM::Role
+    Condition: HasPermissionBoundary
+    Properties:
+      RoleName: BeautyOnTheMoveGitHubActionsRoleWithBoundary
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOIDCProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+              StringLike:
+                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepoName}:*'
+      Policies:
+        - PolicyName: CodeDeployAndS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${DeploymentBucket}'
+                  - !Sub '${DeploymentBucket}/*'
+              - Effect: Allow
+                Action:
+                  - codedeploy:*
+                Resource: '*'
+      PermissionsBoundary: !Ref PermissionBoundaryArn
+
+  # IAM Role for GitHub Actions (WITHOUT Permission Boundary)
+  GitHubActionsRoleWithoutBoundary:
+    Type: AWS::IAM::Role
+    Condition: NoPermissionBoundary
+    Properties:
+      RoleName: BeautyOnTheMoveGitHubActionsRoleWithoutBoundary
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOIDCProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+              StringLike:
+                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepoName}:*'
+      Policies:
+        - PolicyName: CodeDeployAndS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${DeploymentBucket}'
+                  - !Sub '${DeploymentBucket}/*'
+              - Effect: Allow
+                Action:
+                  - codedeploy:*
+                Resource: '*'
+
+  # CodeDeploy Deployment Group (WITH Permission Boundary)
+  CodeDeployDeploymentGroupWithBoundary:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Condition: HasPermissionBoundary
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: BeautyOnTheMoveDeploymentGroupWithBoundary
+      DeploymentStyle:
+        DeploymentType: IN_PLACE
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+      AutoScalingGroups:
+        - !Ref AutoScalingGroup
+      ServiceRoleArn: !GetAtt CodeDeployServiceRoleWithBoundary.Arn
+
+  # CodeDeploy Deployment Group (WITHOUT Permission Boundary)
+  CodeDeployDeploymentGroupWithoutBoundary:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Condition: NoPermissionBoundary
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: BeautyOnTheMoveDeploymentGroupWithoutBoundary
+      DeploymentStyle:
+        DeploymentType: IN_PLACE
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+      AutoScalingGroups:
+        - !Ref AutoScalingGroup
+      ServiceRoleArn: !GetAtt CodeDeployServiceRoleWithoutBoundary.Arn
+
+Conditions:
+  HasPermissionBoundary: !Not [!Equals [!Ref PermissionBoundaryArn, ""]]
+  NoPermissionBoundary: !Equals [!Ref PermissionBoundaryArn, ""]
+
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the load balancer
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-LoadBalancerDNS'
+
+  S3BucketName:
+    Description: Name of the S3 bucket for deployment artifacts
+    Value: !Ref DeploymentBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
+
+  CodeDeployApplicationName:
+    Description: Name of the CodeDeploy application
+    Value: !Ref CodeDeployApplication
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeDeployApplicationName'
+
+  CodeDeployDeploymentGroupNameWithBoundary:
+    Description: Name of the CodeDeploy deployment group (with permission boundary)
+    Value: !If [HasPermissionBoundary, !Ref CodeDeployDeploymentGroupWithBoundary, !Ref "AWS::NoValue"]
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeDeployDeploymentGroupNameWithBoundary'
+
+  CodeDeployDeploymentGroupNameWithoutBoundary:
+    Description: Name of the CodeDeploy deployment group (without permission boundary)
+    Value: !If [NoPermissionBoundary, !Ref CodeDeployDeploymentGroupWithoutBoundary, !Ref "AWS::NoValue"]
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeDeployDeploymentGroupNameWithoutBoundary'
+
+  GitHubActionsRoleARNWithBoundary:
+    Description: ARN of the IAM role for GitHub Actions (with permission boundary)
+    Value: !If [HasPermissionBoundary, !GetAtt GitHubActionsRoleWithBoundary.Arn, !Ref "AWS::NoValue"]
+    Export:
+      Name: !Sub '${AWS::StackName}-GitHubActionsRoleARNWithBoundary'
+
+  GitHubActionsRoleARNWithoutBoundary:
+    Description: ARN of the IAM role for GitHub Actions (without permission boundary)
+    Value: !If [NoPermissionBoundary, !GetAtt GitHubActionsRoleWithoutBoundary.Arn, !Ref "AWS::NoValue"]
+    Export:
+      Name: !Sub '${AWS::StackName}-GitHubActionsRoleARNWithoutBoundary' 

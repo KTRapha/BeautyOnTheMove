@@ -1,0 +1,32 @@
+[
+  {
+    "ParameterKey": "GitHubRepoName",
+    "ParameterValue": "BeautyOnTheMove-Android",
+    "Description": "Name of your GitHub repository"
+  },
+  {
+    "ParameterKey": "GitHubThumbprintList",
+    "ParameterValue": "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "Description": "GitHub thumbprint for OIDC"
+  },
+  {
+    "ParameterKey": "VPC",
+    "ParameterValue": "vpc-0a29001071727f8c0",
+    "Description": "VPC ID - Your actual VPC ID"
+  },
+  {
+    "ParameterKey": "PublicSubnet1",
+    "ParameterValue": "subnet-0091423c985567432",
+    "Description": "First public subnet ID - us-east-1c"
+  },
+  {
+    "ParameterKey": "PublicSubnet2",
+    "ParameterValue": "subnet-073dc15ffe3b960aa",
+    "Description": "Second public subnet ID - us-east-1f"
+  },
+  {
+    "ParameterKey": "PermissionBoundaryArn",
+    "ParameterValue": "",
+    "Description": "ARN of permission boundary (leave empty for no boundary)"
+  }
+] 
