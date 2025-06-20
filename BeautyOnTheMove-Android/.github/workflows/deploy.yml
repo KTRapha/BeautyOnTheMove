@@ -191,9 +191,6 @@ jobs:
           set -e
           cd deployment
           echo "🔧 Current directory: $(pwd)"
-          echo "📦 Installing dos2unix for line ending conversion..."
-          sudo apt-get update
-          sudo apt-get install -y dos2unix
           
           echo "🔧 Fixing script permissions and line endings..."
           
@@ -207,9 +204,12 @@ jobs:
           echo "📋 Scripts before processing:"
           ls -la scripts/
           
-          # Convert Windows line endings to Unix (CRLF to LF)
-          echo "🔄 Using dos2unix to fix line endings..."
-          dos2unix scripts/*.sh
+          # Convert Windows line endings to Unix (CRLF to LF) using tr
+          echo "🔄 Using tr to fix line endings..."
+          for script in scripts/*.sh; do
+            echo "Converting line endings for $script..."
+            tr -d '\r' < "$script" > "${script}.tmp" && mv "${script}.tmp" "$script"
+          done
           
           # Make scripts executable
           echo "🔐 Making scripts executable..."
