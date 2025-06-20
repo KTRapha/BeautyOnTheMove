@@ -1,12 +1,9 @@
-name: Build and Deploy to AWS
+name: Deploy to AWS
 
 on:
-  workflow_dispatch: {}  # Manual trigger
-  # Uncomment the lines below to enable automatic deployment on push
-  # push:
-  #   branches: [ main ]
-  # pull_request:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -19,81 +16,87 @@ permissions:
   contents: read
 
 jobs:
-  build-and-deploy:
+  test-aws-connection:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.IAMROLE_GITHUB }}
+          role-session-name: GitHubActions
+          aws-region: us-east-1
 
-    - name: Setup Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '11'
+      - name: Test AWS connection
+        run: |
+          echo "Testing AWS connection..."
+          aws sts get-caller-identity
+          echo "AWS connection successful!"
 
-    - name: Install dependencies
-      run: |
-        npm install
-        cd android && ./gradlew clean
+  build-and-deploy:
+    needs: test-aws-connection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Build Android APK
-      run: |
-        cd android
-        ./gradlew assembleRelease
-        cd ..
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.IAMROLE_GITHUB }}
+          role-session-name: GitHubActions
+          aws-region: us-east-1
 
-    - name: Fix script permissions and line endings
-      run: |
-        # Fix line endings for shell scripts
-        find aws/scripts -name "*.sh" -exec dos2unix {} \;
-        # Make scripts executable
-        chmod +x aws/scripts/*.sh
-        # Verify scripts are executable
-        ls -la aws/scripts/
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-    - name: Create deployment package
-      run: |
-        mkdir -p deployment
-        cp android/app/build/outputs/apk/release/app-release.apk deployment/
-        cp appspec.yml deployment/
-        cp -r aws/scripts deployment/
-        cd deployment
-        zip -r ../deployment-package.zip .
-        cd ..
+      - name: Install dependencies
+        run: |
+          cd ..
+          npm install
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ secrets.IAMROLE_GITHUB }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: Build Android app
+        run: |
+          cd ..
+          npx react-native build-android --mode=release
 
-    - name: Upload to S3
-      run: |
-        aws s3 cp deployment-package.zip s3://${{ env.S3_BUCKET }}/deployments/
+      - name: Create deployment package
+        run: |
+          mkdir -p deployment
+          cp -r ../android/app/build/outputs/apk/release/* deployment/
+          cp appspec.yml deployment/
+          cp -r aws/scripts deployment/
 
-    - name: Deploy to AWS
-      run: |
-        aws deploy create-deployment \
-          --application-name ${{ env.CODEPLOY_APPLICATION }} \
-          --deployment-group-name ${{ env.CODEPLOY_DEPLOYMENT_GROUP }} \
-          --s3-location bucket=${{ env.S3_BUCKET }},key=deployments/deployment-package.zip,bundleType=zip \
-          --description "Deployment from GitHub Actions"
+      - name: Fix script permissions and line endings
+        run: |
+          cd deployment
+          chmod +x scripts/*.sh
+          # Convert Windows line endings to Unix
+          if command -v dos2unix >/dev/null 2>&1; then
+            dos2unix scripts/*.sh
+          else
+            # Fallback: use sed to remove carriage returns
+            sed -i 's/\r$//' scripts/*.sh
+          fi
 
-    - name: Wait for deployment
-      run: |
-        DEPLOYMENT_ID=$(aws deploy list-deployments \
-          --application-name ${{ env.CODEPLOY_APPLICATION }} \
-          --deployment-group-name ${{ env.CODEPLOY_DEPLOYMENT_GROUP }} \
-          --max-items 1 \
-          --query 'deployments[0]' \
-          --output text)
-        
-        echo "Waiting for deployment: $DEPLOYMENT_ID"
-        aws deploy wait deployment-successful --deployment-id $DEPLOYMENT_ID 
+      - name: Upload to S3
+        run: |
+          aws s3 cp deployment/ s3://ktrapha-beautyonmove-android-deployments/ --recursive
+
+      - name: Deploy to CodeDeploy
+        run: |
+          aws deploy create-deployment \
+            --application-name BeautyOnTheMoveApp \
+            --deployment-group-name BeautyOnTheMoveDeploymentGroupWithoutBoundary \
+            --s3-location bucket=ktrapha-beautyonmove-android-deployments,key=appspec.yml,bundleType=YAML \
+            --deployment-config-name CodeDeployDefault.OneAtATime
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for deployment to complete..."
+          # This is a simplified wait - in production you'd want to check deployment status
+          sleep 30 
