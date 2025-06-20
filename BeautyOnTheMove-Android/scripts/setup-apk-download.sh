@@ -19,23 +19,16 @@ if [ -d "$DEPLOYMENT_ROOT" ]; then
     echo "Looking in deployment root: $DEPLOYMENT_ROOT"
     ls -la "$DEPLOYMENT_ROOT"
     
-    # Find the deployment archive directory - look in deployment-archive subdirectories
-    for deployment_dir in "$DEPLOYMENT_ROOT"/*; do
-        if [ -d "$deployment_dir" ]; then
-            echo "Checking deployment directory: $deployment_dir"
-            # Look for deployment-archive subdirectories
-            for archive_dir in "$deployment_dir"/*; do
-                if [ -d "$archive_dir" ] && [[ "$archive_dir" == *"deployment-archive" ]]; then
-                    echo "Checking archive directory: $archive_dir"
-                    if [ -f "$archive_dir/app-release.apk" ]; then
-                        APK_SOURCE="$archive_dir/app-release.apk"
-                        echo "✅ Found APK in: $APK_SOURCE"
-                        break 2
-                    fi
-                fi
-            done
-        fi
-    done
+    # Search recursively for APK files in deployment-archive directories
+    echo "🔍 Searching recursively for APK files..."
+    APK_FILES=$(find "$DEPLOYMENT_ROOT" -name "app-release.apk" -type f 2>/dev/null | head -1)
+    
+    if [ -n "$APK_FILES" ]; then
+        APK_SOURCE="$APK_FILES"
+        echo "✅ Found APK in: $APK_SOURCE"
+    else
+        echo "❌ No APK files found in deployment root"
+    fi
 fi
 
 if [ -z "$APK_SOURCE" ]; then
