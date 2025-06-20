@@ -75,10 +75,24 @@ jobs:
         cp BeautyOnTheMove-Android/appspec.yml deployment-package/
         cp -r BeautyOnTheMove-Android/scripts deployment-package/
         
+        # Fix script permissions and line endings
+        echo "🔧 Fixing script permissions and line endings..."
+        find deployment-package/scripts -name "*.sh" -exec chmod +x {} \;
+        find deployment-package/scripts -name "*.sh" -exec tr -d '\r' < {} > {}.tmp \; -exec mv {}.tmp {} \;
+        find deployment-package/scripts -name "*.sh" -exec chmod +x {} \;
+        
+        # Debug: Show package contents
+        echo "📋 Deployment package contents:"
+        find deployment-package -type f -exec ls -la {} \;
+        
         echo "📦 Creating deployment ZIP package..."
         cd deployment-package
         zip -r ../deployment-package.zip .
         cd ..
+        
+        # Debug: Show ZIP contents
+        echo "📋 ZIP package contents:"
+        unzip -l deployment-package.zip
         
     - name: Upload to S3
       run: |
