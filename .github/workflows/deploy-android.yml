@@ -79,6 +79,37 @@ jobs:
       run: |
         aws s3 cp deployment-package/ s3://${{ secrets.NEW_S3_BUCKET_NAME }}/deployments/$(date +%Y%m%d-%H%M%S)/ --recursive
         
+    - name: Check deployment group and instances
+      run: |
+        echo "🔍 Checking deployment group configuration..."
+        aws deploy get-deployment-group \
+          --application-name ${{ env.APPLICATION_NAME }} \
+          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }}
+        
+        echo "🔍 Checking EC2 instances in deployment group..."
+        aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values=BeautyOnTheMove*" \
+          --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress,PrivateIpAddress,Tags[?Key==`Name`].Value|[0]]' \
+          --output table
+        
+        echo "🔍 Checking CodeDeploy agent status on instances..."
+        # Get instance IDs from the deployment group
+        INSTANCE_IDS=$(aws deploy get-deployment-group \
+          --application-name ${{ env.APPLICATION_NAME }} \
+          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
+          --query 'deploymentGroupInfo.ec2TagSet.ec2TagSetList[0].ec2TagList[?Key==`Name`].Value' \
+          --output text)
+        
+        if [ "$INSTANCE_IDS" != "None" ] && [ -n "$INSTANCE_IDS" ]; then
+          echo "Instances in deployment group: $INSTANCE_IDS"
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Checking instance $INSTANCE_ID..."
+            aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" || echo "Instance $INSTANCE_ID not accessible via SSM"
+          done
+        else
+          echo "No instances found in deployment group"
+        fi
+        
     - name: Create CodeDeploy deployment
       run: |
         echo "🚀 Creating CodeDeploy deployment..."
@@ -115,8 +146,11 @@ jobs:
         echo "🔍 Checking deployment status..."
         aws deploy get-deployment --deployment-id "${{ env.DEPLOYMENT_ID }}"
         
-        echo "🔍 Checking deployment logs..."
-        aws deploy get-deployment-target --deployment-id "${{ env.DEPLOYMENT_ID }}" --target-id "${{ env.DEPLOYMENT_ID }}" || echo "No target info available"
+        echo "🔍 Getting deployment instances..."
+        aws deploy list-deployment-instances --deployment-id "${{ env.DEPLOYMENT_ID }}" || echo "No instances found"
+        
+        echo "🔍 Getting deployment events..."
+        aws deploy get-deployment-instance --deployment-id "${{ env.DEPLOYMENT_ID }}" --instance-id $(aws deploy list-deployment-instances --deployment-id "${{ env.DEPLOYMENT_ID }}" --query 'instancesList[0]' --output text) || echo "No instance details available"
         
     - name: Wait for deployment with better error handling
       run: |
@@ -134,7 +168,20 @@ jobs:
           echo "❌ Deployment failed or timed out"
           echo "🔍 Getting final deployment status..."
           aws deploy get-deployment --deployment-id "${{ env.DEPLOYMENT_ID }}"
+          
+          echo "🔍 Getting deployment instances..."
+          aws deploy list-deployment-instances --deployment-id "${{ env.DEPLOYMENT_ID }}" || echo "No instances found"
+          
           echo "🔍 Getting deployment events..."
-          aws deploy get-deployment-target --deployment-id "${{ env.DEPLOYMENT_ID }}" --target-id "${{ env.DEPLOYMENT_ID }}" || echo "No target info available"
+          INSTANCE_ID=$(aws deploy list-deployment-instances --deployment-id "${{ env.DEPLOYMENT_ID }}" --query 'instancesList[0]' --output text)
+          if [ "$INSTANCE_ID" != "None" ] && [ -n "$INSTANCE_ID" ]; then
+            aws deploy get-deployment-instance --deployment-id "${{ env.DEPLOYMENT_ID }}" --instance-id "$INSTANCE_ID"
+          else
+            echo "No instances available for detailed debugging"
+          fi
+          
+          echo "🔍 Checking EC2 instance status..."
+          aws ec2 describe-instances --filters "Name=tag:Name,Values=BeautyOnTheMove*" --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress,PrivateIpAddress,Tags[?Key==`Name`].Value|[0]]' --output table
+          
           exit 1
         fi 
