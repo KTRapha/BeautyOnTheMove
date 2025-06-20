@@ -8,8 +8,8 @@ on:
 
 env:
   AWS_REGION: us-east-1  # Change to your preferred region
-  APPLICATION_NAME: BeautyOnTheMove-Android
-  DEPLOYMENT_GROUP_NAME: BeautyOnTheMove-Android-DeploymentGroup
+  APPLICATION_NAME: BeautyOnTheMoveApp
+  DEPLOYMENT_GROUP_NAME: BeautyOnTheMoveDeploymentGroupWithoutBoundary
 
 jobs:
   build-and-deploy:
