@@ -31,9 +31,31 @@ jobs:
 
       - name: Test AWS connection
         run: |
-          echo "Testing AWS connection..."
+          set -e
+          echo "🔍 Testing AWS connection..."
           aws sts get-caller-identity
-          echo "AWS connection successful!"
+          echo "✅ AWS connection successful!"
+
+      - name: Test CodeDeploy access
+        run: |
+          set -e
+          echo "🔍 Testing CodeDeploy access..."
+          aws deploy list-applications
+          echo "✅ CodeDeploy access successful!"
+
+      - name: Test S3 access
+        run: |
+          set -e
+          echo "🔍 Testing S3 access..."
+          aws s3 ls
+          echo "✅ S3 access successful!"
+
+      - name: Test specific S3 bucket access
+        run: |
+          set -e
+          echo "🔍 Testing specific S3 bucket access..."
+          aws s3 ls s3://ktrapha-beautyonmove-android-deployments || { echo "❌ Bucket not found or no access"; exit 1; }
+          echo "✅ S3 bucket test completed!"
 
   build-and-deploy:
     needs: test-aws-connection
@@ -56,85 +78,93 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -e
           cd ..
-          echo "Installing npm dependencies..."
-          npm install || echo "npm install failed, continuing..."
+          echo "📦 Installing npm dependencies..."
+          npm install
+          echo "✅ Dependencies installed successfully!"
 
       - name: Build Android app
         run: |
+          set -e
           cd ..
-          echo "Building Android app..."
+          echo "🔨 Building Android app..."
           # Try different build approaches
           if command -v npx >/dev/null 2>&1; then
             echo "Using npx react-native..."
-            npx react-native build-android --mode=release || echo "npx build failed"
+            npx react-native build-android --mode=release
           else
             echo "npx not available, trying direct gradle..."
-            cd android && ./gradlew assembleRelease || echo "gradle build failed"
+            cd android && ./gradlew assembleRelease
           fi
           
-          echo "Build completed. Checking for APK files..."
-          find . -name "*.apk" -type f || echo "No APK files found"
+          echo "🔍 Checking for APK files..."
+          find . -name "*.apk" -type f || { echo "❌ No APK files found"; exit 1; }
+          echo "✅ Build completed successfully!"
 
       - name: Debug - Check current directory and files
         run: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
+          set -e
+          echo "=== Current directory ==="
+          pwd
+          echo "=== Directory contents ==="
           ls -la
-          echo "AWS scripts directory:"
-          ls -la aws/scripts/ || echo "aws/scripts/ not found"
+          echo "=== AWS scripts directory ==="
+          ls -la aws/scripts/ || { echo "❌ aws/scripts/ not found"; exit 1; }
 
       - name: Create deployment package
         run: |
-          echo "Creating deployment directory..."
+          set -e
+          echo "📁 Creating deployment directory..."
           mkdir -p deployment
           
-          echo "Copying APK files..."
-          cp -r ../android/app/build/outputs/apk/release/* deployment/ || echo "No APK files found"
+          echo "📦 Copying APK files..."
+          cp -r ../android/app/build/outputs/apk/release/* deployment/ || { echo "❌ No APK files found"; exit 1; }
           
-          echo "Copying appspec.yml..."
+          echo "📄 Copying appspec.yml..."
           cp appspec.yml deployment/
           
-          echo "Copying scripts..."
+          echo "📜 Copying scripts..."
           cp -r aws/scripts deployment/
           
-          echo "Deployment directory contents:"
+          echo "📋 Deployment directory contents:"
           ls -la deployment/
-          echo "Scripts directory contents:"
+          echo "📋 Scripts directory contents:"
           ls -la deployment/scripts/
 
       - name: Fix script permissions and line endings
         run: |
+          set -e
           cd deployment
-          echo "Current directory: $(pwd)"
-          echo "Installing dos2unix for line ending conversion..."
+          echo "🔧 Current directory: $(pwd)"
+          echo "📦 Installing dos2unix for line ending conversion..."
           sudo apt-get update
           sudo apt-get install -y dos2unix
           
-          echo "Fixing script permissions and line endings..."
+          echo "🔧 Fixing script permissions and line endings..."
           
           # Check if scripts exist
           if [ ! -d "scripts" ]; then
-            echo "ERROR: scripts directory not found!"
+            echo "❌ ERROR: scripts directory not found!"
             exit 1
           fi
           
           # List scripts before processing
-          echo "Scripts before processing:"
+          echo "📋 Scripts before processing:"
           ls -la scripts/
           
           # Convert Windows line endings to Unix (CRLF to LF)
-          echo "Using dos2unix to fix line endings..."
+          echo "🔄 Using dos2unix to fix line endings..."
           dos2unix scripts/*.sh
           
           # Make scripts executable
-          echo "Making scripts executable..."
+          echo "🔐 Making scripts executable..."
           chmod +x scripts/*.sh
           
           # Verify scripts are executable and have correct line endings
-          echo "Verifying scripts..."
+          echo "✅ Verifying scripts..."
           ls -la scripts/
-          echo "Checking script contents (first few lines):"
+          echo "📄 Checking script contents (first few lines):"
           for script in scripts/*.sh; do
             echo "=== $script ==="
             head -5 "$script"
@@ -142,34 +172,43 @@ jobs:
           done
           
           # Test script execution
-          echo "Testing script execution..."
+          echo "🧪 Testing script execution..."
           for script in scripts/*.sh; do
             echo "Testing $script..."
-            bash -n "$script" && echo "✓ $script syntax OK" || echo "✗ $script syntax error"
+            bash -n "$script" && echo "✅ $script syntax OK" || { echo "❌ $script syntax error"; exit 1; }
           done
 
       - name: Debug - Check final deployment package
         run: |
+          set -e
           cd deployment
-          echo "Final deployment package contents:"
+          echo "📋 Final deployment package contents:"
           find . -type f -exec ls -la {} \;
-          echo "Script permissions:"
+          echo "📋 Script permissions:"
           ls -la scripts/
 
       - name: Upload to S3
         run: |
+          set -e
+          echo "☁️ Uploading to S3..."
           aws s3 cp deployment/ s3://ktrapha-beautyonmove-android-deployments/ --recursive
+          echo "✅ Upload completed successfully!"
 
       - name: Deploy to CodeDeploy
         run: |
+          set -e
+          echo "🚀 Deploying to CodeDeploy..."
           aws deploy create-deployment \
             --application-name BeautyOnTheMoveApp \
             --deployment-group-name BeautyOnTheMoveDeploymentGroupWithoutBoundary \
             --s3-location bucket=ktrapha-beautyonmove-android-deployments,key=appspec.yml,bundleType=YAML \
             --deployment-config-name CodeDeployDefault.OneAtATime
+          echo "✅ Deployment initiated successfully!"
 
       - name: Wait for deployment
         run: |
-          echo "Waiting for deployment to complete..."
+          set -e
+          echo "⏳ Waiting for deployment to complete..."
           # This is a simplified wait - in production you'd want to check deployment status
-          sleep 30 
+          sleep 30
+          echo "✅ Deployment wait completed!" 

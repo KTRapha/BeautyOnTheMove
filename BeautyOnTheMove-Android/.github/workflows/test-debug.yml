@@ -12,12 +12,13 @@ jobs:
 
       - name: Debug - Check file structure
         run: |
+          set -e
           echo "=== Current directory ==="
           pwd
           echo "=== Directory contents ==="
           ls -la
           echo "=== AWS scripts directory ==="
-          ls -la aws/scripts/ || echo "aws/scripts/ not found"
+          ls -la aws/scripts/ || { echo "❌ aws/scripts/ not found"; exit 1; }
           echo "=== Script file details ==="
           if [ -d "aws/scripts" ]; then
             for file in aws/scripts/*.sh; do
@@ -31,6 +32,7 @@ jobs:
 
       - name: Test script execution
         run: |
+          set -e
           echo "=== Testing script execution ==="
           if [ -d "aws/scripts" ]; then
             cd aws/scripts
@@ -38,22 +40,44 @@ jobs:
               echo "Testing: $script"
               # Check if file exists and is readable
               if [ -f "$script" ]; then
-                echo "File exists and is readable"
+                echo "✅ File exists and is readable"
                 # Check if executable
                 if [ -x "$script" ]; then
-                  echo "File is executable"
+                  echo "✅ File is executable"
                 else
-                  echo "File is NOT executable"
+                  echo "⚠️ File is NOT executable"
                   chmod +x "$script"
-                  echo "Made executable"
+                  echo "✅ Made executable"
                 fi
                 # Test syntax
-                bash -n "$script" && echo "Syntax OK" || echo "Syntax ERROR"
+                bash -n "$script" && echo "✅ Syntax OK" || { echo "❌ Syntax ERROR"; exit 1; }
               else
-                echo "File does not exist or is not readable"
+                echo "❌ File does not exist or is not readable"
+                exit 1
               fi
               echo "---"
             done
           else
-            echo "aws/scripts directory not found"
+            echo "❌ aws/scripts directory not found"
+            exit 1
+          fi
+
+      - name: Test line endings
+        run: |
+          set -e
+          echo "=== Testing line endings ==="
+          if [ -d "aws/scripts" ]; then
+            cd aws/scripts
+            for script in *.sh; do
+              echo "Checking line endings for: $script"
+              # Check for Windows line endings (CRLF)
+              if grep -q $'\r' "$script"; then
+                echo "⚠️ Windows line endings detected in $script"
+                echo "Converting to Unix line endings..."
+                sed -i 's/\r$//' "$script"
+                echo "✅ Converted line endings"
+              else
+                echo "✅ Unix line endings OK"
+              fi
+            done
           fi 
