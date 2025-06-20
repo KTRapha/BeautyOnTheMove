@@ -1,15 +1,22 @@
 name: Build and Deploy to AWS
 
 on:
-  workflow_dispatch: {}
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch: {}  # Manual trigger
+  # Uncomment the lines below to enable automatic deployment on push
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
 
 env:
-  NODE_VERSION: '18'
-  JAVA_VERSION: '11'
+  AWS_REGION: us-east-1
+  S3_BUCKET: botm-deploy-665802315326-us-east-1
+  CODEPLOY_APPLICATION: BeautyOnTheMoveApp
+  CODEPLOY_DEPLOYMENT_GROUP: BeautyOnTheMoveDeploymentGroupWithoutBoundary
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   build-and-deploy:
@@ -18,44 +25,66 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ env.NODE_VERSION }}
+        node-version: '18'
         cache: 'npm'
-        
+
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
-        distribution: 'temurin'
-        java-version: ${{ env.JAVA_VERSION }}
-        
+        distribution: 'zulu'
+        java-version: '11'
+
     - name: Install dependencies
       run: |
-        npm ci
-        cd android && ./gradlew wrapper
-        
+        npm install
+        cd android && ./gradlew clean
+
     - name: Build Android APK
       run: |
         cd android
         ./gradlew assembleRelease
         cd ..
-        
+
+    - name: Create deployment package
+      run: |
+        mkdir -p deployment
+        cp android/app/build/outputs/apk/release/app-release.apk deployment/
+        cp appspec.yml deployment/
+        cp -r aws/scripts deployment/
+        cd deployment
+        zip -r ../deployment-package.zip .
+        cd ..
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.IAMROLE_GITHUB }}
-        aws-region: ${{ secrets.AWS_REGION }}
-        
+        aws-region: ${{ env.AWS_REGION }}
+
     - name: Upload to S3
       run: |
-        aws s3 cp android/app/build/outputs/apk/release/app-release.apk s3://${{ secrets.S3_BUCKET }}/beauty-on-the-move.apk
-        
-    - name: Deploy to EC2
+        aws s3 cp deployment-package.zip s3://${{ env.S3_BUCKET }}/deployments/
+
+    - name: Deploy to AWS
       run: |
         aws deploy create-deployment \
-          --application-name ${{ secrets.CODEDEPLOY_APPLICATION }} \
-          --deployment-group-name ${{ secrets.CODEDEPLOY_DEPLOYMENT_GROUP }} \
-          --s3-location bucket=${{ secrets.S3_BUCKET }},key=beauty-on-the-move.apk,bundleType=zip \
-          --description "Deployment from GitHub Actions" 
+          --application-name ${{ env.CODEPLOY_APPLICATION }} \
+          --deployment-group-name ${{ env.CODEPLOY_DEPLOYMENT_GROUP }} \
+          --s3-location bucket=${{ env.S3_BUCKET }},key=deployments/deployment-package.zip,bundleType=zip \
+          --description "Deployment from GitHub Actions"
+
+    - name: Wait for deployment
+      run: |
+        DEPLOYMENT_ID=$(aws deploy list-deployments \
+          --application-name ${{ env.CODEPLOY_APPLICATION }} \
+          --deployment-group-name ${{ env.CODEPLOY_DEPLOYMENT_GROUP }} \
+          --max-items 1 \
+          --query 'deployments[0]' \
+          --output text)
+        
+        echo "Waiting for deployment: $DEPLOYMENT_ID"
+        aws deploy wait deployment-successful --deployment-id $DEPLOYMENT_ID 

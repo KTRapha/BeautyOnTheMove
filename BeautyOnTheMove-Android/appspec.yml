@@ -3,22 +3,22 @@ os: linux
 
 files:
   - source: /
-    destination: /var/www/beauty-on-the-move/
+    destination: /opt/beautyonmove/
 
 hooks:
   BeforeInstall:
-    - location: scripts/before-install.sh
+    - location: aws/scripts/before-install.sh
       timeout: 300
       runas: root
   AfterInstall:
-    - location: scripts/after-install.sh
+    - location: aws/scripts/after-install.sh
       timeout: 300
       runas: root
   ApplicationStart:
-    - location: scripts/start-application.sh
+    - location: aws/scripts/start-application.sh
       timeout: 300
       runas: root
   ApplicationStop:
-    - location: scripts/stop-application.sh
+    - location: aws/scripts/stop-application.sh
       timeout: 300
       runas: root 
