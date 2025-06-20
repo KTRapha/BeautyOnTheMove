@@ -204,11 +204,11 @@ jobs:
           echo "📋 Scripts before processing:"
           ls -la scripts/
           
-          # Convert Windows line endings to Unix (CRLF to LF) using tr
-          echo "🔄 Using tr to fix line endings..."
+          # Convert Windows line endings to Unix (CRLF to LF) using sed
+          echo "🔄 Using sed to fix line endings..."
           for script in scripts/*.sh; do
             echo "Converting line endings for $script..."
-            tr -d '\r' < "$script" > "${script}.tmp" && mv "${script}.tmp" "$script"
+            sed -i 's/\r$//' "$script"
           done
           
           # Make scripts executable

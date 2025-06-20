@@ -35,12 +35,9 @@ jobs:
     - name: Set up Android SDK
       uses: android-actions/setup-android@v2
       
-    - name: Fix gradlew permissions and line endings
+    - name: Fix gradlew permissions
       run: |
         cd android
-        chmod +x gradlew
-        # Convert Windows line endings to Unix line endings using tr
-        tr -d '\r' < gradlew > gradlew.tmp && mv gradlew.tmp gradlew
         chmod +x gradlew
         cd ..
         
@@ -74,17 +71,25 @@ jobs:
         cp android/app/build/outputs/apk/release/app-release.apk deployment-package/
         cp BeautyOnTheMove-Android/appspec.yml deployment-package/
         mkdir -p deployment-package/scripts
+        
+        # Verify script exists before copying
+        if [ ! -f "BeautyOnTheMove-Android/scripts/setup-apk-download.sh" ]; then
+          echo "❌ Script not found: BeautyOnTheMove-Android/scripts/setup-apk-download.sh"
+          echo "📋 Available files in BeautyOnTheMove-Android/scripts/:"
+          ls -la BeautyOnTheMove-Android/scripts/ || echo "Directory not found"
+          exit 1
+        fi
+        
         cp BeautyOnTheMove-Android/scripts/setup-apk-download.sh deployment-package/scripts/
         
-        # Fix script permissions and line endings
-        echo "🔧 Fixing script permissions and line endings..."
-        find deployment-package/scripts -name "*.sh" -exec chmod +x {} \;
-        find deployment-package/scripts -name "*.sh" -exec tr -d '\r' < {} > {}.tmp \; -exec mv {}.tmp {} \;
-        find deployment-package/scripts -name "*.sh" -exec chmod +x {} \;
+        # Fix script permissions
+        echo "🔧 Fixing script permissions..."
+        chmod +x deployment-package/scripts/setup-apk-download.sh
         
         # Debug: Show package contents
         echo "📋 Deployment package contents:"
-        find deployment-package -type f -exec ls -la {} \;
+        ls -la deployment-package/
+        ls -la deployment-package/scripts/
         
         echo "📦 Creating deployment ZIP package..."
         cd deployment-package
