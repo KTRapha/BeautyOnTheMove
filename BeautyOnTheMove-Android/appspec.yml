@@ -2,23 +2,11 @@ version: 0.0
 os: linux
 
 files:
-  - source: /
-    destination: /opt/beautyonmove/
+  - source: app-release.apk
+    destination: /var/www/html/beauty-on-the-move.apk
 
 hooks:
-  BeforeInstall:
-    - location: scripts/before-install.sh
-      timeout: 300
-      runas: root
   AfterInstall:
-    - location: scripts/after-install.sh
-      timeout: 300
-      runas: root
-  ApplicationStart:
-    - location: scripts/start-application.sh
-      timeout: 300
-      runas: root
-  ApplicationStop:
-    - location: scripts/stop-application.sh
+    - location: scripts/setup-apk-download.sh
       timeout: 300
       runas: root 
