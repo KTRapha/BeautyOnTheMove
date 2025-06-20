@@ -104,6 +104,11 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Production signing configuration (commented out for CI/CD safety)
+        // To enable production signing:
+        // 1. Add your production keystore file to android/app/
+        // 2. Update the storeFile, storePassword, keyAlias, and keyPassword below
+        // 3. Change the release buildType to use signingConfigs.release
         release {
             storeFile file('your_keystore_name.keystore')
             storePassword 'Miamor2025'
@@ -117,7 +122,8 @@ android {
             buildConfigField "boolean", "DEBUG", "true"
         }
         release {
-            signingConfig signingConfigs.release
+            // Use debug signing for CI/CD builds to avoid keystore issues
+            signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             shrinkResources false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
