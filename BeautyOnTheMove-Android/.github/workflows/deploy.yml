@@ -76,6 +76,15 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install dependencies
         run: |
           set -e
@@ -84,19 +93,38 @@ jobs:
           npm install
           echo "✅ Dependencies installed successfully!"
 
+      - name: Fix Gradle wrapper permissions
+        run: |
+          set -e
+          cd ..
+          echo "🔧 Fixing Gradle wrapper permissions..."
+          chmod +x android/gradlew
+          echo "✅ Gradle wrapper permissions fixed!"
+
       - name: Build Android app
         run: |
           set -e
           cd ..
           echo "🔨 Building Android app..."
-          # Try different build approaches
-          if command -v npx >/dev/null 2>&1; then
-            echo "Using npx react-native..."
-            npx react-native build-android --mode=release
-          else
-            echo "npx not available, trying direct gradle..."
-            cd android && ./gradlew assembleRelease
-          fi
+          
+          # Set Android environment variables
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$PATH:$ANDROID_HOME/emulator
+          export PATH=$PATH:$ANDROID_HOME/tools
+          export PATH=$PATH:$ANDROID_HOME/tools/bin
+          export PATH=$PATH:$ANDROID_HOME/platform-tools
+          
+          # Fix line endings in gradle files
+          echo "🔄 Fixing line endings in gradle files..."
+          find android -name "*.gradle" -exec sed -i 's/\r$//' {} \;
+          find android -name "*.properties" -exec sed -i 's/\r$//' {} \;
+          
+          # Build using gradle directly (more reliable than npx)
+          echo "🏗️ Building with Gradle..."
+          cd android
+          ./gradlew clean
+          ./gradlew assembleRelease
+          cd ..
           
           echo "🔍 Checking for APK files..."
           find . -name "*.apk" -type f || { echo "❌ No APK files found"; exit 1; }

@@ -1,0 +1,117 @@
+name: Test Android Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Debug - Check environment
+        run: |
+          set -e
+          echo "=== Environment Check ==="
+          echo "Current directory: $(pwd)"
+          echo "Java version:"
+          java -version
+          echo "Node version:"
+          node --version
+          echo "NPM version:"
+          npm --version
+          echo "Android SDK:"
+          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          echo "ANDROID_HOME: $ANDROID_HOME"
+
+      - name: Debug - Check project structure
+        run: |
+          set -e
+          echo "=== Project Structure ==="
+          ls -la
+          echo "=== Android directory ==="
+          ls -la android/ || echo "android/ directory not found"
+          echo "=== Gradle wrapper ==="
+          ls -la android/gradlew* || echo "gradlew not found"
+
+      - name: Install dependencies
+        run: |
+          set -e
+          cd ..
+          echo "📦 Installing npm dependencies..."
+          npm install
+          echo "✅ Dependencies installed successfully!"
+
+      - name: Fix Gradle wrapper permissions
+        run: |
+          set -e
+          cd ..
+          echo "🔧 Fixing Gradle wrapper permissions..."
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            echo "✅ Gradle wrapper permissions fixed!"
+          else
+            echo "❌ Gradle wrapper not found!"
+            exit 1
+          fi
+
+      - name: Fix line endings
+        run: |
+          set -e
+          cd ..
+          echo "🔄 Fixing line endings..."
+          # Fix gradle files
+          find android -name "*.gradle" -exec sed -i 's/\r$//' {} \; || echo "No gradle files found"
+          find android -name "*.properties" -exec sed -i 's/\r$//' {} \; || echo "No properties files found"
+          # Fix gradlew script
+          sed -i 's/\r$//' android/gradlew
+          echo "✅ Line endings fixed!"
+
+      - name: Test Gradle execution
+        run: |
+          set -e
+          cd ..
+          echo "🧪 Testing Gradle execution..."
+          cd android
+          echo "Testing gradle version..."
+          ./gradlew --version
+          echo "✅ Gradle execution test passed!"
+
+      - name: Build Android app
+        run: |
+          set -e
+          cd ..
+          echo "🔨 Building Android app..."
+          
+          # Set Android environment variables
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$PATH:$ANDROID_HOME/emulator
+          export PATH=$PATH:$ANDROID_HOME/tools
+          export PATH=$PATH:$ANDROID_HOME/tools/bin
+          export PATH=$PATH:$ANDROID_HOME/platform-tools
+          
+          # Build using gradle
+          echo "🏗️ Building with Gradle..."
+          cd android
+          ./gradlew clean
+          ./gradlew assembleRelease
+          cd ..
+          
+          echo "🔍 Checking for APK files..."
+          find . -name "*.apk" -type f || { echo "❌ No APK files found"; exit 1; }
+          echo "✅ Build completed successfully!" 
