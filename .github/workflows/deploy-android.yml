@@ -35,16 +35,34 @@ jobs:
     - name: Set up Android SDK
       uses: android-actions/setup-android@v2
       
+    - name: Fix gradlew permissions and line endings
+      run: |
+        cd android
+        chmod +x gradlew
+        dos2unix gradlew
+        cd ..
+        
+    - name: Debug environment
+      run: |
+        echo "Java version:"
+        java -version
+        echo "Gradle version:"
+        cd android && ./gradlew --version && cd ..
+        echo "Android SDK location:"
+        echo $ANDROID_HOME
+        echo "Build tools version:"
+        ls $ANDROID_HOME/build-tools/
+        
     - name: Build Android APK
       run: |
         cd android
-        ./gradlew assembleRelease
+        ./gradlew assembleRelease --info
         cd ..
         
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::665802315326:role/GitHubActionsCodeDeployRole
+        role-to-assume: arn:aws:iam::665802315326:role/GitHubActionsCodeDeployRole-BeautyOnTheMove-Android-Stack
         role-session-name: GitHubActions
         aws-region: ${{ env.AWS_REGION }}
         
