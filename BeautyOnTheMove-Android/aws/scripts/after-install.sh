@@ -7,7 +7,7 @@ set -e
 echo "Starting AfterInstall script..."
 
 # Move deployed files to current directory
-if [ -d "/opt/beautyonmove/app-release.apk" ]; then
+if [ -f "/opt/beautyonmove/app-release.apk" ]; then
     echo "Moving APK to current directory..."
     mv /opt/beautyonmove/app-release.apk /opt/beautyonmove/current/
 fi
@@ -49,6 +49,9 @@ EOF
 if [ -f "/opt/beautyonmove/current/app-release.apk" ]; then
     cp /opt/beautyonmove/current/app-release.apk /var/www/html/beautyonmove.apk
     chmod 644 /var/www/html/beautyonmove.apk
+    echo "APK copied to web directory successfully"
+else
+    echo "Warning: APK file not found in expected location"
 fi
 
 echo "AfterInstall script completed successfully." 

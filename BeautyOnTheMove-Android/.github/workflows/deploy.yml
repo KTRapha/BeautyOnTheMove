@@ -49,6 +49,15 @@ jobs:
         ./gradlew assembleRelease
         cd ..
 
+    - name: Fix script permissions and line endings
+      run: |
+        # Fix line endings for shell scripts
+        find aws/scripts -name "*.sh" -exec dos2unix {} \;
+        # Make scripts executable
+        chmod +x aws/scripts/*.sh
+        # Verify scripts are executable
+        ls -la aws/scripts/
+
     - name: Create deployment package
       run: |
         mkdir -p deployment
