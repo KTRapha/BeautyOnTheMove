@@ -98,8 +98,22 @@ jobs:
           set -e
           cd ..
           echo "🔧 Fixing Gradle wrapper permissions..."
-          chmod +x android/gradlew
-          echo "✅ Gradle wrapper permissions fixed!"
+          
+          # Check if gradlew exists in android directory
+          if [ -f "android/gradlew" ]; then
+            echo "✅ Found gradlew in android/gradlew"
+            chmod +x android/gradlew
+            echo "✅ Gradle wrapper permissions fixed!"
+          elif [ -f "gradlew" ]; then
+            echo "✅ Found gradlew in root directory"
+            chmod +x gradlew
+            echo "✅ Gradle wrapper permissions fixed!"
+          else
+            echo "❌ gradlew not found in expected locations"
+            echo "Searching for gradlew files..."
+            find . -name "gradlew" -type f
+            exit 1
+          fi
 
       - name: Build Android app
         run: |
@@ -119,10 +133,22 @@ jobs:
           find android -name "*.gradle" -exec sed -i 's/\r$//' {} \;
           find android -name "*.properties" -exec sed -i 's/\r$//' {} \;
           
-          # Build using gradle directly (more reliable than npx)
+          # Build using gradle
           echo "🏗️ Building with Gradle..."
           cd android
+          
+          # Fix gradlew permissions FROM THE ANDROID DIRECTORY
+          echo "🔧 Fixing gradlew permissions..."
+          chmod +x ./gradlew
+          echo "✅ Gradlew permissions fixed!"
+          
+          # Verify gradlew is executable
+          ls -la ./gradlew
+          
+          # Now run gradle commands
+          echo "🧹 Running gradle clean..."
           ./gradlew clean
+          echo "🏗️ Running gradle assembleRelease..."
           ./gradlew assembleRelease
           cd ..
           
