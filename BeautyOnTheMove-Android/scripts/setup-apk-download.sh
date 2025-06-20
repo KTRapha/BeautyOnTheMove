@@ -12,34 +12,43 @@ ls -la
 # Find the APK file in the deployment archive
 echo "🔍 Searching for APK file in deployment archive..."
 DEPLOYMENT_ROOT="/opt/codedeploy-agent/deployment-root"
-DEPLOYMENT_ARCHIVE=""
+APK_SOURCE=""
 
 # Find the most recent deployment archive
 if [ -d "$DEPLOYMENT_ROOT" ]; then
     echo "Looking in deployment root: $DEPLOYMENT_ROOT"
     ls -la "$DEPLOYMENT_ROOT"
     
-    # Find the deployment archive directory
-    for dir in "$DEPLOYMENT_ROOT"/*; do
-        if [ -d "$dir" ]; then
-            echo "Checking directory: $dir"
-            if [ -f "$dir/app-release.apk" ]; then
-                DEPLOYMENT_ARCHIVE="$dir"
-                echo "✅ Found APK in: $DEPLOYMENT_ARCHIVE"
-                break
-            fi
+    # Find the deployment archive directory - look in deployment-archive subdirectories
+    for deployment_dir in "$DEPLOYMENT_ROOT"/*; do
+        if [ -d "$deployment_dir" ]; then
+            echo "Checking deployment directory: $deployment_dir"
+            # Look for deployment-archive subdirectories
+            for archive_dir in "$deployment_dir"/*; do
+                if [ -d "$archive_dir" ] && [[ "$archive_dir" == *"deployment-archive" ]]; then
+                    echo "Checking archive directory: $archive_dir"
+                    if [ -f "$archive_dir/app-release.apk" ]; then
+                        APK_SOURCE="$archive_dir/app-release.apk"
+                        echo "✅ Found APK in: $APK_SOURCE"
+                        break 2
+                    fi
+                fi
+            done
         fi
     done
 fi
 
-if [ -z "$DEPLOYMENT_ARCHIVE" ]; then
+if [ -z "$APK_SOURCE" ]; then
     echo "❌ ERROR: Could not find APK file in deployment archive"
     echo "Searching for APK files in current directory and subdirectories..."
     find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
+    
+    # Also search in deployment root
+    echo "Searching in deployment root for APK files..."
+    find "$DEPLOYMENT_ROOT" -name "*.apk" -type f 2>/dev/null || echo "No APK files found in deployment root"
     exit 1
 fi
 
-APK_SOURCE="$DEPLOYMENT_ARCHIVE/app-release.apk"
 APK_DEST="/var/www/html/beauty-on-the-move.apk"
 
 echo "📦 Copying APK from $APK_SOURCE to $APK_DEST"
