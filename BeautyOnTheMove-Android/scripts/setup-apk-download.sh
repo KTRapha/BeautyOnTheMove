@@ -9,13 +9,40 @@ echo "Script location: $0"
 echo "Listing current directory:"
 ls -la
 
-# Check if APK file exists
-if [ ! -f "/var/www/html/beauty-on-the-move.apk" ]; then
-    echo "ERROR: APK file not found at /var/www/html/beauty-on-the-move.apk"
+# Find the APK file in the deployment archive
+echo "🔍 Searching for APK file in deployment archive..."
+DEPLOYMENT_ROOT="/opt/codedeploy-agent/deployment-root"
+DEPLOYMENT_ARCHIVE=""
+
+# Find the most recent deployment archive
+if [ -d "$DEPLOYMENT_ROOT" ]; then
+    echo "Looking in deployment root: $DEPLOYMENT_ROOT"
+    ls -la "$DEPLOYMENT_ROOT"
+    
+    # Find the deployment archive directory
+    for dir in "$DEPLOYMENT_ROOT"/*; do
+        if [ -d "$dir" ]; then
+            echo "Checking directory: $dir"
+            if [ -f "$dir/app-release.apk" ]; then
+                DEPLOYMENT_ARCHIVE="$dir"
+                echo "✅ Found APK in: $DEPLOYMENT_ARCHIVE"
+                break
+            fi
+        fi
+    done
+fi
+
+if [ -z "$DEPLOYMENT_ARCHIVE" ]; then
+    echo "❌ ERROR: Could not find APK file in deployment archive"
+    echo "Searching for APK files in current directory and subdirectories..."
+    find . -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
     exit 1
 fi
 
-echo "APK file found, size: $(ls -lh /var/www/html/beauty-on-the-move.apk | awk '{print $5}')"
+APK_SOURCE="$DEPLOYMENT_ARCHIVE/app-release.apk"
+APK_DEST="/var/www/html/beauty-on-the-move.apk"
+
+echo "📦 Copying APK from $APK_SOURCE to $APK_DEST"
 
 # Ensure Apache is installed and running
 if ! command -v httpd &> /dev/null; then
@@ -29,10 +56,19 @@ echo "Starting Apache..."
 systemctl start httpd
 systemctl enable httpd
 
+# Create web directory if it doesn't exist
+mkdir -p /var/www/html
+
+# Copy APK to web directory
+echo "Copying APK file..."
+cp "$APK_SOURCE" "$APK_DEST"
+
 # Set proper permissions for the APK
 echo "Setting APK permissions..."
-chmod 644 /var/www/html/beauty-on-the-move.apk
-chown apache:apache /var/www/html/beauty-on-the-move.apk
+chmod 644 "$APK_DEST"
+chown apache:apache "$APK_DEST"
+
+echo "APK file copied successfully, size: $(ls -lh "$APK_DEST" | awk '{print $5}')"
 
 # Create a simple download page
 echo "Creating download page..."
