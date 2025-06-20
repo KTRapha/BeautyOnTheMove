@@ -39,7 +39,9 @@ jobs:
       run: |
         cd android
         chmod +x gradlew
-        dos2unix gradlew
+        # Convert Windows line endings to Unix line endings using tr
+        tr -d '\r' < gradlew > gradlew.tmp && mv gradlew.tmp gradlew
+        chmod +x gradlew
         cd ..
         
     - name: Debug environment
