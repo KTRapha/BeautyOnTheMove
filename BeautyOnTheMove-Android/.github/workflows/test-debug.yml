@@ -1,0 +1,59 @@
+name: Debug Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Debug - Check file structure
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== Directory contents ==="
+          ls -la
+          echo "=== AWS scripts directory ==="
+          ls -la aws/scripts/ || echo "aws/scripts/ not found"
+          echo "=== Script file details ==="
+          if [ -d "aws/scripts" ]; then
+            for file in aws/scripts/*.sh; do
+              echo "File: $file"
+              echo "Permissions: $(ls -la "$file")"
+              echo "First 5 lines:"
+              head -5 "$file"
+              echo "---"
+            done
+          fi
+
+      - name: Test script execution
+        run: |
+          echo "=== Testing script execution ==="
+          if [ -d "aws/scripts" ]; then
+            cd aws/scripts
+            for script in *.sh; do
+              echo "Testing: $script"
+              # Check if file exists and is readable
+              if [ -f "$script" ]; then
+                echo "File exists and is readable"
+                # Check if executable
+                if [ -x "$script" ]; then
+                  echo "File is executable"
+                else
+                  echo "File is NOT executable"
+                  chmod +x "$script"
+                  echo "Made executable"
+                fi
+                # Test syntax
+                bash -n "$script" && echo "Syntax OK" || echo "Syntax ERROR"
+              else
+                echo "File does not exist or is not readable"
+              fi
+              echo "---"
+            done
+          else
+            echo "aws/scripts directory not found"
+          fi 

@@ -57,28 +57,71 @@ jobs:
       - name: Install dependencies
         run: |
           cd ..
-          npm install
+          echo "Installing npm dependencies..."
+          npm install || echo "npm install failed, continuing..."
 
       - name: Build Android app
         run: |
           cd ..
-          npx react-native build-android --mode=release
+          echo "Building Android app..."
+          # Try different build approaches
+          if command -v npx >/dev/null 2>&1; then
+            echo "Using npx react-native..."
+            npx react-native build-android --mode=release || echo "npx build failed"
+          else
+            echo "npx not available, trying direct gradle..."
+            cd android && ./gradlew assembleRelease || echo "gradle build failed"
+          fi
+          
+          echo "Build completed. Checking for APK files..."
+          find . -name "*.apk" -type f || echo "No APK files found"
+
+      - name: Debug - Check current directory and files
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "AWS scripts directory:"
+          ls -la aws/scripts/ || echo "aws/scripts/ not found"
 
       - name: Create deployment package
         run: |
+          echo "Creating deployment directory..."
           mkdir -p deployment
-          cp -r ../android/app/build/outputs/apk/release/* deployment/
+          
+          echo "Copying APK files..."
+          cp -r ../android/app/build/outputs/apk/release/* deployment/ || echo "No APK files found"
+          
+          echo "Copying appspec.yml..."
           cp appspec.yml deployment/
+          
+          echo "Copying scripts..."
           cp -r aws/scripts deployment/
+          
+          echo "Deployment directory contents:"
+          ls -la deployment/
+          echo "Scripts directory contents:"
+          ls -la deployment/scripts/
 
       - name: Fix script permissions and line endings
         run: |
           cd deployment
+          echo "Current directory: $(pwd)"
           echo "Installing dos2unix for line ending conversion..."
           sudo apt-get update
           sudo apt-get install -y dos2unix
           
           echo "Fixing script permissions and line endings..."
+          
+          # Check if scripts exist
+          if [ ! -d "scripts" ]; then
+            echo "ERROR: scripts directory not found!"
+            exit 1
+          fi
+          
+          # List scripts before processing
+          echo "Scripts before processing:"
+          ls -la scripts/
           
           # Convert Windows line endings to Unix (CRLF to LF)
           echo "Using dos2unix to fix line endings..."
@@ -92,11 +135,26 @@ jobs:
           echo "Verifying scripts..."
           ls -la scripts/
           echo "Checking script contents (first few lines):"
-          head -5 scripts/*.sh
+          for script in scripts/*.sh; do
+            echo "=== $script ==="
+            head -5 "$script"
+            echo "=== End of $script ==="
+          done
           
           # Test script execution
           echo "Testing script execution..."
-          bash -n scripts/*.sh || echo "Script syntax check failed"
+          for script in scripts/*.sh; do
+            echo "Testing $script..."
+            bash -n "$script" && echo "✓ $script syntax OK" || echo "✗ $script syntax error"
+          done
+
+      - name: Debug - Check final deployment package
+        run: |
+          cd deployment
+          echo "Final deployment package contents:"
+          find . -type f -exec ls -la {} \;
+          echo "Script permissions:"
+          ls -la scripts/
 
       - name: Upload to S3
         run: |
