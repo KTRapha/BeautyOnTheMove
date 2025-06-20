@@ -86,28 +86,38 @@ jobs:
           --application-name ${{ env.APPLICATION_NAME }} \
           --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }}
         
-        echo "🔍 Checking EC2 instances in deployment group..."
-        aws ec2 describe-instances \
-          --filters "Name=tag:Name,Values=BeautyOnTheMove*" \
-          --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress,PrivateIpAddress,Tags[?Key==`Name`].Value|[0]]' \
-          --output table
-        
-        echo "🔍 Checking CodeDeploy agent status on instances..."
-        # Get instance IDs from the deployment group
-        INSTANCE_IDS=$(aws deploy get-deployment-group \
+        echo "🔍 Checking Auto Scaling Group status..."
+        ASG_NAME=$(aws deploy get-deployment-group \
           --application-name ${{ env.APPLICATION_NAME }} \
           --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
-          --query 'deploymentGroupInfo.ec2TagSet.ec2TagSetList[0].ec2TagList[?Key==`Name`].Value' \
+          --query 'deploymentGroupInfo.autoScalingGroups[0].name' \
           --output text)
         
-        if [ "$INSTANCE_IDS" != "None" ] && [ -n "$INSTANCE_IDS" ]; then
-          echo "Instances in deployment group: $INSTANCE_IDS"
-          for INSTANCE_ID in $INSTANCE_IDS; do
-            echo "Checking instance $INSTANCE_ID..."
-            aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" || echo "Instance $INSTANCE_ID not accessible via SSM"
-          done
+        if [ "$ASG_NAME" != "None" ] && [ -n "$ASG_NAME" ]; then
+          echo "Auto Scaling Group: $ASG_NAME"
+          aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$ASG_NAME"
+          
+          echo "🔍 Checking Auto Scaling Group instances..."
+          aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$ASG_NAME" \
+            --query 'AutoScalingGroups[0].Instances[*].[InstanceId,HealthStatus,LifecycleState]' \
+            --output table
         else
-          echo "No instances found in deployment group"
+          echo "No Auto Scaling Group found in deployment group"
+        fi
+        
+        echo "🔍 Checking target group status..."
+        TARGET_GROUP_NAME=$(aws deploy get-deployment-group \
+          --application-name ${{ env.APPLICATION_NAME }} \
+          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
+          --query 'deploymentGroupInfo.loadBalancerInfo.targetGroupInfoList[0].name' \
+          --output text)
+        
+        if [ "$TARGET_GROUP_NAME" != "None" ] && [ -n "$TARGET_GROUP_NAME" ]; then
+          echo "Target Group: $TARGET_GROUP_NAME"
+          aws elbv2 describe-target-health --target-group-arn $(aws elbv2 describe-target-groups --names "$TARGET_GROUP_NAME" --query 'TargetGroups[0].TargetGroupArn' --output text) || echo "Could not get target group health"
+        else
+          echo "No target group found in deployment group"
         fi
         
     - name: Create CodeDeploy deployment
@@ -150,7 +160,27 @@ jobs:
         aws deploy list-deployment-instances --deployment-id "${{ env.DEPLOYMENT_ID }}" || echo "No instances found"
         
         echo "🔍 Getting deployment events..."
-        aws deploy get-deployment-instance --deployment-id "${{ env.DEPLOYMENT_ID }}" --instance-id $(aws deploy list-deployment-instances --deployment-id "${{ env.DEPLOYMENT_ID }}" --query 'instancesList[0]' --output text) || echo "No instance details available"
+        INSTANCE_ID=$(aws deploy list-deployment-instances --deployment-id "${{ env.DEPLOYMENT_ID }}" --query 'instancesList[0]' --output text)
+        if [ "$INSTANCE_ID" != "None" ] && [ -n "$INSTANCE_ID" ]; then
+          aws deploy get-deployment-instance --deployment-id "${{ env.DEPLOYMENT_ID }}" --instance-id "$INSTANCE_ID"
+        else
+          echo "No instances available for detailed debugging"
+        fi
+        
+        echo "🔍 Checking Auto Scaling Group status..."
+        ASG_NAME=$(aws deploy get-deployment-group \
+          --application-name ${{ env.APPLICATION_NAME }} \
+          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
+          --query 'deploymentGroupInfo.autoScalingGroups[0].name' \
+          --output text)
+        
+        if [ "$ASG_NAME" != "None" ] && [ -n "$ASG_NAME" ]; then
+          echo "Auto Scaling Group: $ASG_NAME"
+          aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$ASG_NAME" \
+            --query 'AutoScalingGroups[0].Instances[*].[InstanceId,HealthStatus,LifecycleState]' \
+            --output table
+        fi
         
     - name: Wait for deployment with better error handling
       run: |
@@ -180,8 +210,20 @@ jobs:
             echo "No instances available for detailed debugging"
           fi
           
-          echo "🔍 Checking EC2 instance status..."
-          aws ec2 describe-instances --filters "Name=tag:Name,Values=BeautyOnTheMove*" --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress,PrivateIpAddress,Tags[?Key==`Name`].Value|[0]]' --output table
+          echo "🔍 Checking Auto Scaling Group status..."
+          ASG_NAME=$(aws deploy get-deployment-group \
+            --application-name ${{ env.APPLICATION_NAME }} \
+            --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
+            --query 'deploymentGroupInfo.autoScalingGroups[0].name' \
+            --output text)
+          
+          if [ "$ASG_NAME" != "None" ] && [ -n "$ASG_NAME" ]; then
+            echo "Auto Scaling Group: $ASG_NAME"
+            aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names "$ASG_NAME" \
+              --query 'AutoScalingGroups[0].Instances[*].[InstanceId,HealthStatus,LifecycleState]' \
+              --output table
+          fi
           
           exit 1
         fi 
