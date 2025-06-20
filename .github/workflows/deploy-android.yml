@@ -73,7 +73,8 @@ jobs:
         mkdir -p deployment-package
         cp android/app/build/outputs/apk/release/app-release.apk deployment-package/
         cp BeautyOnTheMove-Android/appspec.yml deployment-package/
-        cp -r BeautyOnTheMove-Android/scripts deployment-package/
+        mkdir -p deployment-package/scripts
+        cp BeautyOnTheMove-Android/scripts/setup-apk-download.sh deployment-package/scripts/
         
         # Fix script permissions and line endings
         echo "🔧 Fixing script permissions and line endings..."
