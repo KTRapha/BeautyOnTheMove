@@ -81,50 +81,60 @@ jobs:
         
     - name: Create CodeDeploy deployment
       run: |
-        aws deploy create-deployment \
+        echo "🚀 Creating CodeDeploy deployment..."
+        DEPLOYMENT_RESPONSE=$(aws deploy create-deployment \
           --application-name ${{ env.APPLICATION_NAME }} \
           --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
           --s3-location bucket=${{ secrets.NEW_S3_BUCKET_NAME }},key=deployments/$(date +%Y%m%d-%H%M%S)/,bundleType=zip \
           --deployment-config-name CodeDeployDefault.OneAtATime \
-          --description "Deployment from GitHub Actions"
-          
+          --description "Deployment from GitHub Actions")
+        
+        echo "📋 Deployment Response: $DEPLOYMENT_RESPONSE"
+        
+        # Extract deployment ID from response
+        DEPLOYMENT_ID=$(echo "$DEPLOYMENT_RESPONSE" | jq -r '.deploymentId')
+        
+        if [ "$DEPLOYMENT_ID" = "null" ] || [ -z "$DEPLOYMENT_ID" ]; then
+          echo "❌ Failed to create deployment or get deployment ID"
+          echo "Full response: $DEPLOYMENT_RESPONSE"
+          exit 1
+        fi
+        
+        echo "✅ Deployment created successfully with ID: $DEPLOYMENT_ID"
+        echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
+        
     - name: Get deployment ID and check status
       run: |
-        echo "🔍 Getting deployment ID..."
-        DEPLOYMENT_ID=$(aws deploy list-deployments \
-          --application-name ${{ env.APPLICATION_NAME }} \
-          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
-          --max-items 1 \
-          --query 'deployments[0]' \
-          --output text)
+        echo "🔍 Using deployment ID from previous step: ${{ env.DEPLOYMENT_ID }}"
         
-        echo "📋 Deployment ID: $DEPLOYMENT_ID"
+        if [ -z "${{ env.DEPLOYMENT_ID }}" ]; then
+          echo "❌ No deployment ID available from previous step"
+          exit 1
+        fi
         
         echo "🔍 Checking deployment status..."
-        aws deploy get-deployment --deployment-id $DEPLOYMENT_ID
+        aws deploy get-deployment --deployment-id "${{ env.DEPLOYMENT_ID }}"
         
         echo "🔍 Checking deployment logs..."
-        aws deploy get-deployment-target --deployment-id $DEPLOYMENT_ID --target-id $DEPLOYMENT_ID || echo "No target info available"
+        aws deploy get-deployment-target --deployment-id "${{ env.DEPLOYMENT_ID }}" --target-id "${{ env.DEPLOYMENT_ID }}" || echo "No target info available"
         
     - name: Wait for deployment with better error handling
       run: |
-        DEPLOYMENT_ID=$(aws deploy list-deployments \
-          --application-name ${{ env.APPLICATION_NAME }} \
-          --deployment-group-name ${{ env.DEPLOYMENT_GROUP_NAME }} \
-          --max-items 1 \
-          --query 'deployments[0]' \
-          --output text)
+        echo "⏳ Waiting for deployment ${{ env.DEPLOYMENT_ID }} to complete..."
         
-        echo "⏳ Waiting for deployment $DEPLOYMENT_ID to complete..."
+        if [ -z "${{ env.DEPLOYMENT_ID }}" ]; then
+          echo "❌ No deployment ID available from previous step"
+          exit 1
+        fi
         
         # Wait for deployment with timeout and better error reporting
-        if aws deploy wait deployment-successful --deployment-id $DEPLOYMENT_ID --cli-read-timeout 300; then
+        if aws deploy wait deployment-successful --deployment-id "${{ env.DEPLOYMENT_ID }}" --cli-read-timeout 300; then
           echo "✅ Deployment completed successfully!"
         else
           echo "❌ Deployment failed or timed out"
           echo "🔍 Getting final deployment status..."
-          aws deploy get-deployment --deployment-id $DEPLOYMENT_ID
+          aws deploy get-deployment --deployment-id "${{ env.DEPLOYMENT_ID }}"
           echo "🔍 Getting deployment events..."
-          aws deploy get-deployment-target --deployment-id $DEPLOYMENT_ID --target-id $DEPLOYMENT_ID || echo "No target info available"
+          aws deploy get-deployment-target --deployment-id "${{ env.DEPLOYMENT_ID }}" --target-id "${{ env.DEPLOYMENT_ID }}" || echo "No target info available"
           exit 1
         fi 
