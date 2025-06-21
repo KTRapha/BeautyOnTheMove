@@ -95,15 +95,34 @@ systemctl enable httpd
 # Create web directory if it doesn't exist
 mkdir -p /var/www/html
 
+# Get absolute paths to avoid copy issues
+APK_SOURCE_ABS=$(readlink -f "$APK_SOURCE")
+APK_DEST_ABS=$(readlink -f "$APK_DEST")
+
+echo "Source absolute path: $APK_SOURCE_ABS"
+echo "Destination absolute path: $APK_DEST_ABS"
+
 # Check if source and destination are the same file
-if [ "$(readlink -f "$APK_SOURCE")" = "$(readlink -f "$APK_DEST")" ]; then
+if [ "$APK_SOURCE_ABS" = "$APK_DEST_ABS" ]; then
     echo "✅ APK is already in the correct location: $APK_DEST"
     echo "APK file size: $(ls -lh "$APK_DEST" | awk '{print $5}')"
 else
-    # Copy APK to web directory
-    echo "Copying APK file..."
-    cp "$APK_SOURCE" "$APK_DEST"
-    echo "APK file copied successfully"
+    # Check if destination already exists and is different
+    if [ -f "$APK_DEST" ]; then
+        echo "Destination file already exists, checking if it's different..."
+        if [ "$APK_SOURCE_ABS" != "$APK_DEST_ABS" ]; then
+            echo "Copying APK file (replacing existing)..."
+            cp "$APK_SOURCE" "$APK_DEST"
+            echo "APK file copied successfully"
+        else
+            echo "✅ APK is already in the correct location"
+        fi
+    else
+        # Copy APK to web directory
+        echo "Copying APK file..."
+        cp "$APK_SOURCE" "$APK_DEST"
+        echo "APK file copied successfully"
+    fi
 fi
 
 # Set proper permissions for the APK
