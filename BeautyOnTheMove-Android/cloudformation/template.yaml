@@ -4,9 +4,9 @@ Description: 'CloudFormation template for BeautyOnTheMove Android app deployment
 Parameters:
   GitHubRepo:
     Type: String
-    Description: "GitHub repository name (format: owner/repo)"
+    Description: "GitHub repository name in the format: owner/repo (e.g., KTRapha/BeautyOnTheMove)"
     Default: "KTRapha/BeautyOnTheMove"
-    AllowedPattern: "[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+"
+    AllowedPattern: "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$"
 
   VPC:
     Type: AWS::EC2::VPC::Id
@@ -151,8 +151,7 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
-            yum install -y ruby wget
-            yum install -y httpd
+            yum install -y ruby wget httpd
             systemctl start httpd
             systemctl enable httpd
             cd /home/ec2-user
