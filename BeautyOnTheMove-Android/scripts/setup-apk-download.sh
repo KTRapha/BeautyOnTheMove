@@ -72,85 +72,40 @@ chown apache:apache "$APK_DEST"
 
 echo "APK file copied successfully, size: $(ls -lh "$APK_DEST" | awk '{print $5}')"
 
-# Create a simple download page
-echo "Creating download page..."
-cat > /var/www/html/index.html << 'EOF'
+# Update the existing apk-download.html file with the real download link
+echo "Updating apk-download.html with real download link..."
+cat > /var/www/html/apk-download.html << 'EOF'
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BeautyOnTheMove - Download</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeautyOnTheMove APK Download</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            text-align: center; 
-            padding: 50px; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            min-height: 100vh;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        .download-btn { 
-            background: #4CAF50; 
-            color: white; 
-            padding: 15px 30px; 
-            text-decoration: none; 
-            border-radius: 25px; 
-            display: inline-block; 
-            margin: 20px; 
-            font-weight: bold;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-        .download-btn:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-        }
-        h1 {
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
-        p {
-            margin-bottom: 30px;
-            font-size: 1.2em;
-            opacity: 0.9;
-        }
-        .version {
-            font-size: 0.9em;
-            opacity: 0.7;
-            margin-top: 20px;
-        }
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .download-btn { display: inline-block; background: #007bff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .download-btn:hover { background: #0056b3; }
+        .status { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>BeautyOnTheMove</h1>
-        <p>Your beauty services marketplace app</p>
-        <a href="beauty-on-the-move.apk" class="download-btn">📱 Download APK</a>
-        <div class="version">
-            <p>Version 1.0.0</p>
-            <p>Deployed: $(date)</p>
+        <h1>BeautyOnTheMove Android App</h1>
+        <div class="status success">
+            <strong>✅ Status:</strong> APK successfully deployed and ready for download!
         </div>
+        <p>Your BeautyOnTheMove Android app has been successfully built and deployed. Click the button below to download the APK file.</p>
+        <a href="beauty-on-the-move.apk" class="download-btn">📱 Download APK</a>
+        <p><small>Server IP: 54.237.203.146 | Deployed: $(date)</small></p>
     </div>
 </body>
 </html>
 EOF
 
 # Set proper permissions for the HTML file
-chmod 644 /var/www/html/index.html
-chown apache:apache /var/www/html/index.html
+chmod 644 /var/www/html/apk-download.html
+chown apache:apache /var/www/html/apk-download.html
 
 # Verify Apache is running
 if systemctl is-active --quiet httpd; then
@@ -166,4 +121,4 @@ PUBLIC_HOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/public-hostnam
 
 echo "=== APK download setup completed successfully ==="
 echo "APK is available at: http://$PUBLIC_HOSTNAME/beauty-on-the-move.apk"
-echo "Download page is available at: http://$PUBLIC_HOSTNAME/" 
+echo "Download page is available at: http://$PUBLIC_HOSTNAME/apk-download.html" 
