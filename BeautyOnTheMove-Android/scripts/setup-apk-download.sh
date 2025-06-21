@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Setup APK download script for BeautyOnTheMove Android app - FIXED VERSION
+# Setup APK download script for BeautyOnTheMove Android app - FINAL FIX
 set -e  # Exit on any error
 
-echo "=== Starting APK download setup (FIXED VERSION) ==="
+echo "=== Starting APK download setup (FINAL FIX) ==="
 echo "Current directory: $(pwd)"
 echo "Script location: $0"
 
@@ -41,8 +41,8 @@ if [ -z "$APK_SOURCE" ]; then
     echo "✅ Created test APK: $APK_SOURCE"
 fi
 
-# Define destination
-APK_DEST="/var/www/html/beauty-on-the-move.apk"
+# Define destination - use a different name to avoid conflicts
+APK_DEST="/var/www/html/beauty-on-the-move-app.apk"
 
 echo "📦 Processing APK from $APK_SOURCE to $APK_DEST"
 
@@ -94,7 +94,7 @@ cat > /var/www/html/apk-download.html << 'EOF'
             <strong>✅ Status:</strong> APK successfully deployed and ready for download!
         </div>
         <p>Your BeautyOnTheMove Android app has been successfully built and deployed. Click the button below to download the APK file.</p>
-        <a href="beauty-on-the-move.apk" class="download-btn">📱 Download APK</a>
+        <a href="beauty-on-the-move-app.apk" class="download-btn">📱 Download APK</a>
         <p><small>Deployed: $(date)</small></p>
     </div>
 </body>
@@ -118,6 +118,6 @@ fi
 PUBLIC_HOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname 2>/dev/null || echo "localhost")
 
 echo "=== APK download setup completed successfully ==="
-echo "APK is available at: http://$PUBLIC_HOSTNAME/beauty-on-the-move.apk"
+echo "APK is available at: http://$PUBLIC_HOSTNAME/beauty-on-the-move-app.apk"
 echo "Download page is available at: http://$PUBLIC_HOSTNAME/apk-download.html"
 echo "✅ Script completed successfully!" 
