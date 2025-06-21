@@ -360,3 +360,14 @@ npm install
 ```bash
 pm2 start npm --name "beautyonmove-app" -- start
 ```
+
+## Deployment Status
+
+- ✅ Apache web server configured and working
+- ✅ EC2 instance accessible at: http://54.237.203.146
+- 🚀 Ready for APK deployment via GitHub Actions
+
+## Latest Deployment
+
+**Trigger Date**: $(date)
+**Status**: Ready for deployment
