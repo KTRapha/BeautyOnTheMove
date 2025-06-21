@@ -78,7 +78,7 @@ fi
 
 APK_DEST="/var/www/html/beauty-on-the-move.apk"
 
-echo "📦 Copying APK from $APK_SOURCE to $APK_DEST"
+echo "📦 Processing APK from $APK_SOURCE to $APK_DEST"
 
 # Ensure Apache is installed and running
 if ! command -v httpd &> /dev/null; then
@@ -95,16 +95,23 @@ systemctl enable httpd
 # Create web directory if it doesn't exist
 mkdir -p /var/www/html
 
-# Copy APK to web directory
-echo "Copying APK file..."
-cp "$APK_SOURCE" "$APK_DEST"
+# Check if source and destination are the same file
+if [ "$(readlink -f "$APK_SOURCE")" = "$(readlink -f "$APK_DEST")" ]; then
+    echo "✅ APK is already in the correct location: $APK_DEST"
+    echo "APK file size: $(ls -lh "$APK_DEST" | awk '{print $5}')"
+else
+    # Copy APK to web directory
+    echo "Copying APK file..."
+    cp "$APK_SOURCE" "$APK_DEST"
+    echo "APK file copied successfully"
+fi
 
 # Set proper permissions for the APK
 echo "Setting APK permissions..."
 chmod 644 "$APK_DEST"
 chown apache:apache "$APK_DEST"
 
-echo "APK file copied successfully, size: $(ls -lh "$APK_DEST" | awk '{print $5}')"
+echo "APK file ready, size: $(ls -lh "$APK_DEST" | awk '{print $5}')"
 
 # Update the existing apk-download.html file with the real download link
 echo "Updating apk-download.html with real download link..."
