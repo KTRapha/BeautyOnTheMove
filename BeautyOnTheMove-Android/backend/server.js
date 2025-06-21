@@ -2,7 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
+
+// Import database connection
+const { pool, testConnection, initializeDatabase, seedSampleData } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,45 +31,92 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// In-memory data storage (replace with database in production)
-let users = [];
-let bookings = [];
-let offers = [];
-let authTokens = [];
-
 // Helper functions
 const generateToken = (userId) => {
-  return `token_${userId}_${Date.now()}`;
+  return jwt.sign({ userId }, process.env.JWT_SECRET, { 
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d' 
+  });
 };
 
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+const authenticateToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
+    if (!token) {
+      return res.status(401).json({ message: 'Access token required' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Check if token exists in database and is not expired
+    const client = await pool.connect();
+    const tokenResult = await client.query(
+      'SELECT user_id FROM auth_tokens WHERE token = $1 AND expires_at > NOW()',
+      [token]
+    );
+    client.release();
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(403).json({ message: 'Invalid or expired token' });
+    }
+
+    // Get user data
+    const userClient = await pool.connect();
+    const userResult = await userClient.query(
+      'SELECT id, email, name, phone, user_type FROM users WHERE id = $1',
+      [decoded.userId]
+    );
+    userClient.release();
+
+    if (userResult.rows.length === 0) {
+      return res.status(403).json({ message: 'User not found' });
+    }
+
+    req.user = userResult.rows[0];
+    next();
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(403).json({ message: 'Invalid token' });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(403).json({ message: 'Token expired' });
+    }
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
-
-  const user = users.find(u => authTokens.includes(token));
-  if (!user) {
-    return res.status(403).json({ message: 'Invalid token' });
-  }
-
-  req.user = user;
-  next();
 };
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'BeautyOnTheMove API is running',
-    timestamp: new Date().toISOString()
-  });
+app.get('/health', async (req, res) => {
+  try {
+    const dbConnected = await testConnection();
+    res.json({ 
+      status: 'OK', 
+      message: 'BeautyOnTheMove API is running',
+      database: dbConnected ? 'connected' : 'disconnected',
+      timestamp: new Date().toISOString(),
+      endpoints: [
+        'POST /auth/register',
+        'POST /auth/login', 
+        'POST /auth/logout',
+        'GET /user/profile',
+        'PUT /user/profile',
+        'GET /bookings',
+        'POST /bookings',
+        'PUT /bookings/:id',
+        'DELETE /bookings/:id',
+        'GET /offers',
+        'GET /offers/:id',
+        'GET /dashboard/stats'
+      ]
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'ERROR', message: error.message });
+  }
 });
 
 // Authentication endpoints
-app.post('/auth/register', (req, res) => {
+app.post('/auth/register', async (req, res) => {
   try {
     const { email, password, name, phone, userType = 'customer' } = req.body;
 
@@ -71,36 +124,50 @@ app.post('/auth/register', (req, res) => {
       return res.status(400).json({ message: 'Email, password, and name are required' });
     }
 
+    const client = await pool.connect();
+
     // Check if user already exists
-    if (users.find(u => u.email === email)) {
+    const existingUser = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      client.release();
       return res.status(409).json({ message: 'User already exists' });
     }
 
-    // Create new user
-    const newUser = {
-      id: users.length + 1,
-      email,
-      password: password, // In production, hash this with bcrypt
-      name,
-      phone,
-      userType,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    users.push(newUser);
+    // Create new user
+    const newUser = await client.query(
+      `INSERT INTO users (email, password, name, phone, user_type) 
+       VALUES ($1, $2, $3, $4, $5) 
+       RETURNING id, email, name, phone, user_type, created_at`,
+      [email, hashedPassword, name, phone, userType]
+    );
 
     // Generate token
-    const token = generateToken(newUser.id);
-    authTokens.push(token);
+    const token = generateToken(newUser.rows[0].id);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
+    // Store token in database
+    await client.query(
+      'INSERT INTO auth_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+      [newUser.rows[0].id, token, expiresAt]
+    );
+
+    client.release();
 
     res.status(201).json({
       message: 'User registered successfully',
       user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        userType: newUser.userType
+        id: newUser.rows[0].id,
+        email: newUser.rows[0].email,
+        name: newUser.rows[0].name,
+        userType: newUser.rows[0].user_type
       },
       token
     });
@@ -109,7 +176,7 @@ app.post('/auth/register', (req, res) => {
   }
 });
 
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -117,15 +184,40 @@ app.post('/auth/login', (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
+    const client = await pool.connect();
+
     // Find user
-    const user = users.find(u => u.email === email && u.password === password);
-    if (!user) {
+    const userResult = await client.query(
+      'SELECT id, email, password, name, phone, user_type FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      client.release();
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      client.release();
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // Generate token
     const token = generateToken(user.id);
-    authTokens.push(token);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
+    // Store token in database
+    await client.query(
+      'INSERT INTO auth_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+      [user.id, token, expiresAt]
+    );
+
+    client.release();
 
     res.json({
       message: 'Login successful',
@@ -133,7 +225,7 @@ app.post('/auth/login', (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        userType: user.userType
+        userType: user.user_type
       },
       token
     });
@@ -142,16 +234,20 @@ app.post('/auth/login', (req, res) => {
   }
 });
 
-app.post('/auth/logout', authenticateToken, (req, res) => {
+app.post('/auth/logout', authenticateToken, async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     
-    // Remove token
-    const tokenIndex = authTokens.indexOf(token);
-    if (tokenIndex > -1) {
-      authTokens.splice(tokenIndex, 1);
-    }
+    const client = await pool.connect();
+    
+    // Remove token from database
+    await client.query(
+      'DELETE FROM auth_tokens WHERE token = $1',
+      [token]
+    );
+
+    client.release();
 
     res.json({ message: 'Logout successful' });
   } catch (error) {
@@ -160,53 +256,52 @@ app.post('/auth/logout', authenticateToken, (req, res) => {
 });
 
 // User management endpoints
-app.get('/user/profile', authenticateToken, (req, res) => {
+app.get('/user/profile', authenticateToken, async (req, res) => {
   try {
-    const user = users.find(u => u.id === req.user.id);
-    if (!user) {
+    const client = await pool.connect();
+    
+    const userResult = await client.query(
+      'SELECT id, email, name, phone, user_type, created_at, updated_at FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    client.release();
+
+    if (userResult.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      phone: user.phone,
-      userType: user.userType,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt
-    });
+    res.json(userResult.rows[0]);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-app.put('/user/profile', authenticateToken, (req, res) => {
+app.put('/user/profile', authenticateToken, async (req, res) => {
   try {
     const { name, phone } = req.body;
-    const userIndex = users.findIndex(u => u.id === req.user.id);
     
-    if (userIndex === -1) {
+    const client = await pool.connect();
+    
+    const updateResult = await client.query(
+      `UPDATE users 
+       SET name = COALESCE($1, name), 
+           phone = COALESCE($2, phone), 
+           updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $3 
+       RETURNING id, email, name, phone, user_type`,
+      [name, phone, req.user.id]
+    );
+
+    client.release();
+
+    if (updateResult.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Update user
-    users[userIndex] = {
-      ...users[userIndex],
-      name: name || users[userIndex].name,
-      phone: phone || users[userIndex].phone,
-      updatedAt: new Date().toISOString()
-    };
-
     res.json({
       message: 'Profile updated successfully',
-      user: {
-        id: users[userIndex].id,
-        email: users[userIndex].email,
-        name: users[userIndex].name,
-        phone: users[userIndex].phone,
-        userType: users[userIndex].userType
-      }
+      user: updateResult.rows[0]
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -214,16 +309,24 @@ app.put('/user/profile', authenticateToken, (req, res) => {
 });
 
 // Bookings endpoints
-app.get('/bookings', authenticateToken, (req, res) => {
+app.get('/bookings', authenticateToken, async (req, res) => {
   try {
-    const userBookings = bookings.filter(b => b.userId === req.user.id);
-    res.json(userBookings);
+    const client = await pool.connect();
+    
+    const bookingsResult = await client.query(
+      'SELECT * FROM bookings WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.user.id]
+    );
+
+    client.release();
+
+    res.json(bookingsResult.rows);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-app.post('/bookings', authenticateToken, (req, res) => {
+app.post('/bookings', authenticateToken, async (req, res) => {
   try {
     const { serviceType, date, time, location, description, price } = req.body;
 
@@ -231,72 +334,77 @@ app.post('/bookings', authenticateToken, (req, res) => {
       return res.status(400).json({ message: 'Service type, date, time, and location are required' });
     }
 
-    const newBooking = {
-      id: bookings.length + 1,
-      userId: req.user.id,
-      serviceType,
-      date,
-      time,
-      location,
-      description,
-      price: price || 0,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    const client = await pool.connect();
+    
+    const newBooking = await client.query(
+      `INSERT INTO bookings (user_id, service_type, date, time, location, description, price) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+       RETURNING *`,
+      [req.user.id, serviceType, date, time, location, description, price || 0]
+    );
 
-    bookings.push(newBooking);
+    client.release();
 
     res.status(201).json({
       message: 'Booking created successfully',
-      booking: newBooking
+      booking: newBooking.rows[0]
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-app.put('/bookings/:id', authenticateToken, (req, res) => {
+app.put('/bookings/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, date, time, location, description } = req.body;
 
-    const bookingIndex = bookings.findIndex(b => b.id === parseInt(id) && b.userId === req.user.id);
+    const client = await pool.connect();
     
-    if (bookingIndex === -1) {
+    const updateResult = await client.query(
+      `UPDATE bookings 
+       SET status = COALESCE($1, status),
+           date = COALESCE($2, date),
+           time = COALESCE($3, time),
+           location = COALESCE($4, location),
+           description = COALESCE($5, description),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6 AND user_id = $7 
+       RETURNING *`,
+      [status, date, time, location, description, id, req.user.id]
+    );
+
+    client.release();
+
+    if (updateResult.rows.length === 0) {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Update booking
-    bookings[bookingIndex] = {
-      ...bookings[bookingIndex],
-      status: status || bookings[bookingIndex].status,
-      date: date || bookings[bookingIndex].date,
-      time: time || bookings[bookingIndex].time,
-      location: location || bookings[bookingIndex].location,
-      description: description || bookings[bookingIndex].description,
-      updatedAt: new Date().toISOString()
-    };
-
     res.json({
       message: 'Booking updated successfully',
-      booking: bookings[bookingIndex]
+      booking: updateResult.rows[0]
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-app.delete('/bookings/:id', authenticateToken, (req, res) => {
+app.delete('/bookings/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const bookingIndex = bookings.findIndex(b => b.id === parseInt(id) && b.userId === req.user.id);
+
+    const client = await pool.connect();
     
-    if (bookingIndex === -1) {
+    const deleteResult = await client.query(
+      'DELETE FROM bookings WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, req.user.id]
+    );
+
+    client.release();
+
+    if (deleteResult.rows.length === 0) {
       return res.status(404).json({ message: 'Booking not found' });
     }
-
-    bookings.splice(bookingIndex, 1);
 
     res.json({ message: 'Booking deleted successfully' });
   } catch (error) {
@@ -305,103 +413,111 @@ app.delete('/bookings/:id', authenticateToken, (req, res) => {
 });
 
 // Offers endpoints
-app.get('/offers', (req, res) => {
+app.get('/offers', async (req, res) => {
   try {
-    res.json(offers);
+    const client = await pool.connect();
+    
+    const offersResult = await client.query(
+      'SELECT * FROM offers WHERE is_active = true ORDER BY created_at DESC'
+    );
+
+    client.release();
+
+    res.json(offersResult.rows);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-app.get('/offers/:id', (req, res) => {
+app.get('/offers/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const offer = offers.find(o => o.id === parseInt(id));
+
+    const client = await pool.connect();
     
-    if (!offer) {
+    const offerResult = await client.query(
+      'SELECT * FROM offers WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    client.release();
+
+    if (offerResult.rows.length === 0) {
       return res.status(404).json({ message: 'Offer not found' });
     }
 
-    res.json(offer);
+    res.json(offerResult.rows[0]);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 // Dashboard endpoints
-app.get('/dashboard/stats', authenticateToken, (req, res) => {
+app.get('/dashboard/stats', authenticateToken, async (req, res) => {
   try {
-    const userBookings = bookings.filter(b => b.userId === req.user.id);
-    const totalBookings = userBookings.length;
-    const pendingBookings = userBookings.filter(b => b.status === 'pending').length;
-    const completedBookings = userBookings.filter(b => b.status === 'completed').length;
-    const totalSpent = userBookings.reduce((sum, b) => sum + (b.price || 0), 0);
+    const client = await pool.connect();
+    
+    // Get booking statistics
+    const statsResult = await client.query(`
+      SELECT 
+        COUNT(*) as total_bookings,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_bookings,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_bookings,
+        COALESCE(SUM(price), 0) as total_spent
+      FROM bookings 
+      WHERE user_id = $1
+    `, [req.user.id]);
 
+    // Get recent bookings
+    const recentBookingsResult = await client.query(
+      'SELECT * FROM bookings WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5',
+      [req.user.id]
+    );
+
+    client.release();
+
+    const stats = statsResult.rows[0];
     res.json({
-      totalBookings,
-      pendingBookings,
-      completedBookings,
-      totalSpent,
-      recentBookings: userBookings.slice(-5).reverse()
+      totalBookings: parseInt(stats.total_bookings),
+      pendingBookings: parseInt(stats.pending_bookings),
+      completedBookings: parseInt(stats.completed_bookings),
+      totalSpent: parseFloat(stats.total_spent),
+      recentBookings: recentBookingsResult.rows
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-// Initialize some sample data
-const initializeSampleData = () => {
-  // Sample offers
-  offers = [
-    {
-      id: 1,
-      title: 'Hair Styling',
-      description: 'Professional hair styling services',
-      price: 50,
-      duration: '1 hour',
-      category: 'hair',
-      image: 'https://via.placeholder.com/300x200?text=Hair+Styling'
-    },
-    {
-      id: 2,
-      title: 'Manicure & Pedicure',
-      description: 'Complete nail care services',
-      price: 35,
-      duration: '45 minutes',
-      category: 'nails',
-      image: 'https://via.placeholder.com/300x200?text=Manicure+Pedicure'
-    },
-    {
-      id: 3,
-      title: 'Facial Treatment',
-      description: 'Rejuvenating facial treatment',
-      price: 75,
-      duration: '1.5 hours',
-      category: 'facial',
-      image: 'https://via.placeholder.com/300x200?text=Facial+Treatment'
-    },
-    {
-      id: 4,
-      title: 'Makeup Application',
-      description: 'Professional makeup for special occasions',
-      price: 60,
-      duration: '1 hour',
-      category: 'makeup',
-      image: 'https://via.placeholder.com/300x200?text=Makeup+Application'
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    // Test database connection
+    const dbConnected = await testConnection();
+    if (!dbConnected) {
+      console.error('❌ Failed to connect to database. Please check your configuration.');
+      process.exit(1);
     }
-  ];
 
-  console.log('Sample data initialized');
+    // Initialize database tables
+    await initializeDatabase();
+    
+    // Seed sample data
+    await seedSampleData();
+
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`🚀 BeautyOnTheMove API server running on port ${PORT}`);
+      console.log(`📱 Health check: http://localhost:${PORT}/health`);
+      console.log(`🔗 API Base URL: http://localhost:${PORT}`);
+      console.log(`🗄️ Database: PostgreSQL (AWS RDS) - Connected`);
+    });
+  } catch (error) {
+    console.error('❌ Server startup failed:', error.message);
+    process.exit(1);
+  }
 };
 
-// Initialize sample data
-initializeSampleData();
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 BeautyOnTheMove API server running on port ${PORT}`);
-  console.log(`📱 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 API Base URL: http://localhost:${PORT}`);
-});
+startServer();
 
 module.exports = app; 
