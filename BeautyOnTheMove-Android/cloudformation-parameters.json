@@ -1,32 +1,26 @@
 [
   {
     "ParameterKey": "GitHubRepo",
-    "ParameterValue": "KTRapha/BeautyOnTheMove",
-    "Description": "GitHub repository name (format: owner/repo)"
+    "ParameterValue": "KTRapha/BeautyOnTheMove"
   },
   {
     "ParameterKey": "VPC",
-    "ParameterValue": "vpc-0a29001071727f8c0",
-    "Description": "VPC ID - Your actual VPC ID"
+    "ParameterValue": "vpc-0a29001071727f8c0"
   },
   {
     "ParameterKey": "PublicSubnet1",
-    "ParameterValue": "subnet-0091423c985567432",
-    "Description": "First public subnet ID - us-east-1c"
+    "ParameterValue": "subnet-0091423c985567432"
   },
   {
     "ParameterKey": "PublicSubnet2",
-    "ParameterValue": "subnet-073dc15ffe3b960aa",
-    "Description": "Second public subnet ID - us-east-1f"
+    "ParameterValue": "subnet-073dc15ffe3b960aa"
   },
   {
     "ParameterKey": "UsePermissionBoundary",
-    "ParameterValue": "false",
-    "Description": "Whether to use permission boundary (true/false)"
+    "ParameterValue": "false"
   },
   {
     "ParameterKey": "PermissionBoundaryArn",
-    "ParameterValue": "",
-    "Description": "ARN of permission boundary (leave empty for no boundary)"
+    "ParameterValue": ""
   }
 ] 
