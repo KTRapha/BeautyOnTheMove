@@ -89,7 +89,7 @@ mkdir -p "$BACKEND_DIR"
 cd "$BACKEND_DIR"
 
 echo "📋 Copying backend files from project..."
-cp -r ../../backend/* .
+cp -r ~/BeautyOnTheMove/BeautyOnTheMove-Android/backend/* .
 
 echo "📦 Installing dependencies..."
 npm install --production
@@ -100,7 +100,7 @@ NODE_ENV=production
 PORT=3000
 
 # JWT Configuration
-JWT_SECRET=beautyonmove_jwt_secret_key_2025
+JWT_SECRET=nSxl15wE19e3nyyefacFPge9HecgAmlEpvfPY2EaJZw=
 JWT_EXPIRES_IN=7d
 
 # PostgreSQL Database Configuration (AWS RDS)
@@ -109,7 +109,21 @@ DB_PORT=5432
 DB_NAME=beautyonmove
 DB_USER=beautyonmove_user
 DB_PASSWORD=$DB_PASSWORD
-DATABASE_URL=postgresql://beautyonmove_user:$DB_PASSWORD@$RDS_ENDPOINT:5432/beautyonmove
+DATABASE_URL=postgresql://beautyonmove_user:$DB_PASSWORD@$RDS_ENDPOINT:5432/beautyonmove?sslmode=require
+
+# SSL Configuration for AWS RDS
+DB_SSL=true
+PGSSLMODE=require
+
+# Email Configuration (for future email features)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+
+# AWS Configuration
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=beautyonmove-app-assets
 
 # Security
 CORS_ORIGIN=*
@@ -119,18 +133,21 @@ RATE_LIMIT_MAX_REQUESTS=100
 # App Configuration
 APP_NAME=BeautyOnTheMove
 APP_VERSION=1.0.0
-
-# Database SSL (for AWS RDS)
-DB_SSL=true
 EOF
 
-echo "🚀 Starting backend service with PM2..."
+echo "📦 Installing Node dependencies..."
+npm install
+
+echo "🔧 Starting backend service with PM2..."
 
 # Stop existing service if running
 pm2 stop "$SERVICE_NAME" 2>/dev/null || true
 pm2 delete "$SERVICE_NAME" 2>/dev/null || true
 
-# Start new service
+# Load environment variables
+export $(grep -v '^#' .env | xargs)
+
+# Start the app
 pm2 start server.js --name "$SERVICE_NAME"
 pm2 save
 pm2 startup

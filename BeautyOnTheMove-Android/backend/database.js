@@ -8,7 +8,11 @@ const dbConfig = {
   database: process.env.DB_NAME,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  // SSL configuration for AWS RDS
+  ssl: {
+    rejectUnauthorized: false, // Required for AWS RDS
+    sslmode: 'require' // Force SSL connection
+  },
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,

@@ -25,7 +25,7 @@ echo "3. Template: 'Free tier'"
 echo "4. Settings:"
 echo "   - DB instance identifier: beautyonmove-db"
 echo "   - Master username: beautyonmove_use"
-echo "   - Master password: Tshamala1982"
+echo "   - Master password: [create a secure password]"
 echo "5. Instance configuration:"
 echo "   - DB instance class: db.t3.micro (Free tier)"
 echo "   - Storage: 20 GB (Free tier)"
@@ -60,9 +60,11 @@ echo ""
 
 # Get RDS endpoint from user
 read -p "Enter your RDS endpoint (e.g., beautyonmove-db.xxxxxxxxx.us-east-1.rds.amazonaws.com): " RDS_ENDPOINT
+read -p "Enter your database password: " -s DB_PASSWORD
+echo
 
-if [ -z "$RDS_ENDPOINT" ]; then
-    echo "❌ RDS endpoint is required."
+if [ -z "$RDS_ENDPOINT" ] || [ -z "$DB_PASSWORD" ]; then
+    echo "❌ RDS endpoint and password are required."
     exit 1
 fi
 
@@ -87,27 +89,32 @@ mkdir -p "$BACKEND_DIR"
 cd "$BACKEND_DIR"
 
 echo "📋 Copying backend files from project..."
-cp -r ../../backend/* .
+cp -r ~/BeautyOnTheMove/BeautyOnTheMove-Android/backend/* .
 
 echo "📦 Installing dependencies..."
 npm install --production
 
 echo "🔧 Creating environment file with RDS configuration..."
 cat > .env << EOF
-NODE_ENV=production
-PORT=3000
-
-# JWT Configuration
-JWT_SECRET=nSxl15wE19e3nyyefacFPge9HecgAmlEpvfPY2EaJZw=
-JWT_EXPIRES_IN=7d
-
-# PostgreSQL Database Configuration (AWS RDS)
+# Database Configuration (AWS RDS)
 DB_HOST=$RDS_ENDPOINT
 DB_PORT=5432
 DB_NAME=beautyonmove
 DB_USER=beautyonmove_use
-DB_PASSWORD=Tshamala1982
-DATABASE_URL=postgresql://beautyonmove_use:Tshamala1982@$RDS_ENDPOINT:5432/beautyonmove
+DB_PASSWORD=$DB_PASSWORD
+DATABASE_URL=postgresql://beautyonmove_use:$DB_PASSWORD@$RDS_ENDPOINT:5432/beautyonmove?sslmode=require
+
+# SSL Configuration for AWS RDS
+DB_SSL=true
+PGSSLMODE=require
+
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+
+# JWT Configuration
+JWT_SECRET=nSxl15wE19e3nyyefacFPge9HecgAmlEpvfPY2EaJZw=
+JWT_EXPIRES_IN=7d
 
 # Email Configuration (for future email features)
 SMTP_HOST=smtp.gmail.com
@@ -127,9 +134,6 @@ RATE_LIMIT_MAX_REQUESTS=100
 # App Configuration
 APP_NAME=BeautyOnTheMove
 APP_VERSION=1.0.0
-
-# Database SSL (for AWS RDS)
-DB_SSL=true
 EOF
 
 echo "🚀 Starting backend service with PM2..."
