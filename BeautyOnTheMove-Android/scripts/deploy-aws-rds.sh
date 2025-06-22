@@ -89,7 +89,19 @@ mkdir -p "$BACKEND_DIR"
 cd "$BACKEND_DIR"
 
 echo "📋 Copying backend files from project..."
-cp -r ../backend/* .
+# Use absolute path to the backend directory
+BACKEND_SOURCE_DIR="/home/ec2-user/BeautyOnTheMove/BeautyOnTheMove-Android/backend"
+
+if [ -d "$BACKEND_SOURCE_DIR" ]; then
+    echo "Found backend directory at: $BACKEND_SOURCE_DIR"
+    cp -r "$BACKEND_SOURCE_DIR"/* /var/www/beautyonmove-backend/
+else
+    echo "Backend directory not found at: $BACKEND_SOURCE_DIR"
+    echo "Current directory: $(pwd)"
+    echo "Available directories:"
+    ls -la
+    exit 1
+fi
 
 echo "📦 Installing dependencies..."
 npm install --production
