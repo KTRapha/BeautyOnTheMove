@@ -24,7 +24,7 @@ echo "2. Choose 'Standard create' and 'PostgreSQL'"
 echo "3. Template: 'Free tier'"
 echo "4. Settings:"
 echo "   - DB instance identifier: beautyonmove-db"
-echo "   - Master username: beautyonmove_user"
+echo "   - Master username: beautyonmove_use"
 echo "   - Master password: [create a secure password]"
 echo "5. Instance configuration:"
 echo "   - DB instance class: db.t3.micro (Free tier)"
@@ -107,9 +107,9 @@ JWT_EXPIRES_IN=7d
 DB_HOST=$RDS_ENDPOINT
 DB_PORT=5432
 DB_NAME=beautyonmove
-DB_USER=beautyonmove_user
+DB_USER=beautyonmove_use
 DB_PASSWORD=$DB_PASSWORD
-DATABASE_URL=postgresql://beautyonmove_user:$DB_PASSWORD@$RDS_ENDPOINT:5432/beautyonmove?sslmode=require
+DATABASE_URL=postgresql://beautyonmove_use:$DB_PASSWORD@$RDS_ENDPOINT:5432/beautyonmove?sslmode=require
 
 # SSL Configuration for AWS RDS
 DB_SSL=true
@@ -176,7 +176,7 @@ echo ""
 echo "🗄️ Database: PostgreSQL on AWS RDS"
 echo "   Endpoint: $RDS_ENDPOINT"
 echo "   Database: beautyonmove"
-echo "   User: beautyonmove_user"
+echo "   User: beautyonmove_use"
 echo ""
 echo "🔗 Backend API:"
 echo "   http://$EC2_IP:3000"
