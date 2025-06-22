@@ -89,7 +89,7 @@ mkdir -p "$BACKEND_DIR"
 cd "$BACKEND_DIR"
 
 echo "📋 Copying backend files from project..."
-cp -r ~/BeautyOnTheMove/BeautyOnTheMove-Android/backend/* .
+cp -r ../backend/* .
 
 echo "📦 Installing dependencies..."
 npm install --production
