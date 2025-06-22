@@ -10,7 +10,14 @@ echo "🚀 Setting up PostgreSQL database on AWS RDS + Backend API"
 BACKEND_DIR="/var/www/beautyonmove-backend"
 SERVICE_NAME="beautyonmove-api"
 PORT=3000
+
+# Get EC2 public IP address more reliably
 EC2_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "44.211.36.78")
+
+# Fallback to known IP if metadata service fails
+if [[ "$EC2_IP" == *"html"* ]] || [[ "$EC2_IP" == *"xml"* ]] || [[ -z "$EC2_IP" ]]; then
+    EC2_IP="44.211.36.78"
+fi
 
 echo "📍 EC2 Instance IP: $EC2_IP"
 
@@ -175,12 +182,25 @@ echo "🔍 Checking backend service status..."
 pm2 status "$SERVICE_NAME"
 
 echo "🔍 Testing API health endpoint..."
-sleep 5
-if curl -s http://localhost:$PORT/health > /dev/null; then
-    echo "✅ Backend API is running successfully"
-else
-    echo "❌ Backend API health check failed"
-fi
+echo "Waiting for server to start up..."
+sleep 10
+
+# Try multiple times with better error reporting
+for i in {1..3}; do
+    echo "Attempt $i: Testing http://localhost:$PORT/health"
+    if curl -s -f http://localhost:$PORT/health > /dev/null; then
+        echo "✅ Backend API is running successfully"
+        break
+    else
+        echo "❌ Health check attempt $i failed"
+        if [ $i -eq 3 ]; then
+            echo "❌ Backend API health check failed after 3 attempts"
+            echo "Checking PM2 logs for errors..."
+            pm2 logs beautyonmove-api --lines 10
+        fi
+        sleep 5
+    fi
+done
 
 echo ""
 echo "=== 🎉 AWS RDS + Backend Deployment Completed! ==="
